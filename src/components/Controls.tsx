@@ -91,6 +91,13 @@ export default function Controls({
   const [autocompleteDestination, setAutocompleteDestination] = useState<google.maps.places.Autocomplete | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const [isEditing, setIsEditing] = useState(true);
+
+  useEffect(() => {
+    if (recommendationResult && !isLoading) {
+      setIsEditing(false);
+    }
+  }, [recommendationResult, isLoading]);
 
   useEffect(() => {
     try {
@@ -139,6 +146,10 @@ export default function Controls({
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);
     alert("Route link copied to clipboard!");
+  };
+
+  const handleEdit = () => {
+    setIsEditing(true);
   };
 
   const onOriginLoad = (autocomplete: google.maps.places.Autocomplete) => setAutocompleteOrigin(autocomplete);
@@ -191,103 +202,151 @@ export default function Controls({
 
       {!isMinimized && (
         <>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => setTransportMode('BUS')}
-              style={{
-                flex: 1,
-                background: transportMode === 'BUS' ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)',
-                color: transportMode === 'BUS' ? '#fff' : 'rgba(255,255,255,0.6)',
-                boxShadow: 'none'
-              }}
-            >
-              <Bus size={18} /> Bus
-            </button>
-            <button
-              onClick={() => setTransportMode('TRAIN')}
-              style={{
-                flex: 1,
-                background: transportMode === 'TRAIN' ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)',
-                color: transportMode === 'TRAIN' ? '#fff' : 'rgba(255,255,255,0.6)',
-                boxShadow: 'none'
-              }}
-            >
-              <Train size={18} /> Train
-            </button>
-          </div>
+          {isEditing ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => setTransportMode('BUS')}
+                  style={{
+                    flex: 1,
+                    background: transportMode === 'BUS' ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)',
+                    color: transportMode === 'BUS' ? '#fff' : 'rgba(255,255,255,0.6)',
+                    boxShadow: 'none'
+                  }}
+                >
+                  <Bus size={18} /> Bus
+                </button>
+                <button
+                  onClick={() => setTransportMode('TRAIN')}
+                  style={{
+                    flex: 1,
+                    background: transportMode === 'TRAIN' ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)',
+                    color: transportMode === 'TRAIN' ? '#fff' : 'rgba(255,255,255,0.6)',
+                    boxShadow: 'none'
+                  }}
+                >
+                  <Train size={18} /> Train
+                </button>
+              </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', position: 'relative' }}>
-            <div style={{ position: 'relative' }}>
-              <MapPin size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'rgba(255,255,255,0.4)', zIndex: 2 }} />
-              <Autocomplete onLoad={onOriginLoad} onPlaceChanged={onOriginPlaceChanged}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', position: 'relative' }}>
+                <div style={{ position: 'relative' }}>
+                  <MapPin size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'rgba(255,255,255,0.4)', zIndex: 2 }} />
+                  <Autocomplete onLoad={onOriginLoad} onPlaceChanged={onOriginPlaceChanged}>
+                    <input
+                      type="text"
+                      placeholder="Origin"
+                      value={origin}
+                      onChange={(e) => setOrigin(e.target.value)}
+                      style={{ paddingLeft: '40px', paddingRight: '40px' }}
+                    />
+                  </Autocomplete>
+                  <button
+                    onClick={handleGPS}
+                    style={{ position: 'absolute', right: '4px', top: '4px', padding: '6px', width: 'auto', background: 'transparent', boxShadow: 'none' }}
+                    title="Use Current Location"
+                  >
+                    <LocateFixed size={18} color="#3b82f6" />
+                  </button>
+                </div>
+
+                <button onClick={handleSwap} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 10, padding: '4px', width: 'auto', background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '50%' }}>
+                  <ArrowUpDown size={14} color="#eab308" />
+                </button>
+
+                <div style={{ position: 'relative' }}>
+                  <Navigation size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'rgba(255,255,255,0.4)', zIndex: 2 }} />
+                  <Autocomplete onLoad={onDestinationLoad} onPlaceChanged={onDestinationPlaceChanged}>
+                    <input
+                      type="text"
+                      placeholder="Destination"
+                      value={destination}
+                      onChange={(e) => setDestination(e.target.value)}
+                      style={{ paddingLeft: '40px', paddingRight: '40px' }}
+                    />
+                  </Autocomplete>
+                </div>
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '8px' }}>
+                  <span>Departure Time ({timezone.split('/')[1] || timezone})</span>
+                </div>
                 <input
-                  type="text"
-                  placeholder="Origin"
-                  value={origin}
-                  onChange={(e) => setOrigin(e.target.value)}
-                  style={{ paddingLeft: '40px', paddingRight: '40px' }}
+                  type="datetime-local"
+                  value={inputValue}
+                  min={minInputValue}
+                  max={maxInputValue}
+                  onChange={handleDateChange}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    background: 'rgba(15, 23, 42, 0.6)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    fontFamily: 'Outfit, sans-serif'
+                  }}
                 />
-              </Autocomplete>
-              <button
-                onClick={handleGPS}
-                style={{ position: 'absolute', right: '4px', top: '4px', padding: '6px', width: 'auto', background: 'transparent', boxShadow: 'none' }}
-                title="Use Current Location"
-              >
-                <LocateFixed size={18} color="#3b82f6" />
+              </div>
+
+              <button onClick={() => { setIsEditing(false); onCalculate(); }} disabled={isLoading || !origin || !destination}>
+                Find Best Side
               </button>
+
+              {recentRoutes.length > 0 && !isLoading && (
+                <div style={{ marginTop: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', marginBottom: '8px' }}>
+                    <History size={14} /> Recent Routes
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {recentRoutes.map((route, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          setOrigin(route.origin);
+                          setDestination(route.destination);
+                          setTransportMode(route.mode);
+                        }}
+                        style={{ background: 'rgba(255,255,255,0.05)', textAlign: 'left', padding: '8px 12px', fontSize: '0.85rem', boxShadow: 'none' }}
+                      >
+                        <div style={{ color: '#fff', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{route.origin.split(',')[0]} → {route.destination.split(',')[0]}</div>
+                        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{route.mode}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-
-            <button onClick={handleSwap} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 10, padding: '4px', width: 'auto', background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '50%' }}>
-              <ArrowUpDown size={14} color="#eab308" />
-            </button>
-
-            <div style={{ position: 'relative' }}>
-              <Navigation size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'rgba(255,255,255,0.4)', zIndex: 2 }} />
-              <Autocomplete onLoad={onDestinationLoad} onPlaceChanged={onDestinationPlaceChanged}>
-                <input
-                  type="text"
-                  placeholder="Destination"
-                  value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
-                  style={{ paddingLeft: '40px', paddingRight: '40px' }}
-                />
-              </Autocomplete>
+          ) : (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
+               <div style={{ flex: 1, minWidth: 0, marginRight: '12px' }}>
+                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.95rem', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                    {transportMode === 'BUS' ? <Bus size={14} color="#3b82f6" /> : <Train size={14} color="#3b82f6" />}
+                    <span style={{ textOverflow: 'ellipsis', overflow: 'hidden' }}>{origin.split(',')[0] || 'Origin'}</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)' }}>→</span>
+                    <span style={{ textOverflow: 'ellipsis', overflow: 'hidden' }}>{destination.split(',')[0] || 'Destination'}</span>
+                 </div>
+                 <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginTop: '4px' }}>
+                    {(() => {
+                      try { return formatInTimeZone(departureDate, timezone, "MMM d, h:mm a"); }
+                      catch(e) { return ''; }
+                    })()}
+                 </div>
+               </div>
+               <button onClick={handleEdit} style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', fontSize: '0.8rem', borderRadius: '6px', width: 'auto', boxShadow: 'none' }}>
+                 Edit
+               </button>
             </div>
-          </div>
-
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '8px' }}>
-              <span>Departure Time ({timezone.split('/')[1] || timezone})</span>
-            </div>
-            <input
-              type="datetime-local"
-              value={inputValue}
-              min={minInputValue}
-              max={maxInputValue}
-              onChange={handleDateChange}
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                background: 'rgba(15, 23, 42, 0.6)',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                borderRadius: '8px',
-                color: '#fff',
-                fontFamily: 'Outfit, sans-serif'
-              }}
-            />
-          </div>
-
-          <button onClick={onCalculate} disabled={isLoading || !origin || !destination}>
-            {isLoading ? 'Calculating...' : 'Find Best Side'}
-          </button>
-
-          {isLoading && (
-            <div className="skeleton-loader" style={{ height: '200px', borderRadius: '12px', marginTop: '8px' }} />
           )}
 
-          {!isLoading && recommendationResult && (
+          {isLoading && (
+            <div className="skeleton-loader" style={{ height: '200px', borderRadius: '12px', marginTop: '12px' }} />
+          )}
+
+          {!isLoading && !isEditing && recommendationResult && (
             <div style={{
-              marginTop: '8px',
+              marginTop: '12px',
               padding: '16px',
               borderRadius: '12px',
               background: weatherOverride ? 'linear-gradient(135deg, rgba(100, 116, 139, 0.2), rgba(71, 85, 105, 0.1))' :
@@ -371,12 +430,15 @@ export default function Controls({
               </div>
               
               <div style={{ textAlign: 'center', marginTop: '16px', fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>
-                Calculated using accurate seasonal sun paths for {formatInTimeZone(departureDate, timezone, 'MMMM yyyy')}
+                Calculated using accurate seasonal sun paths for {(() => {
+                  try { return formatInTimeZone(departureDate, timezone, 'MMMM yyyy'); }
+                  catch(e) { return ''; }
+                })()}
               </div>
             </div>
           )}
 
-          {shadierTime && !isLoading && (
+          {!isEditing && shadierTime && !isLoading && (
             <button 
               onClick={() => {
                 setDepartureDate(shadierTime);
@@ -388,8 +450,8 @@ export default function Controls({
             </button>
           )}
 
-          {steps && steps.length > 0 && !isLoading && (
-            <details style={{ marginTop: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
+          {!isEditing && steps && steps.length > 0 && !isLoading && (
+            <details style={{ marginTop: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
               <summary style={{ cursor: 'pointer', fontSize: '0.85rem', color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>View Journey Steps</summary>
               <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {steps.map((step, idx) => (
@@ -402,29 +464,6 @@ export default function Controls({
             </details>
           )}
 
-          {recentRoutes.length > 0 && !recommendationResult && !isLoading && (
-            <div style={{ marginTop: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', marginBottom: '8px' }}>
-                <History size={14} /> Recent Routes
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {recentRoutes.map((route, i) => (
-                  <button
-                    key={i}
-                    onClick={() => {
-                      setOrigin(route.origin);
-                      setDestination(route.destination);
-                      setTransportMode(route.mode);
-                    }}
-                    style={{ background: 'rgba(255,255,255,0.05)', textAlign: 'left', padding: '8px 12px', fontSize: '0.85rem', boxShadow: 'none' }}
-                  >
-                    <div style={{ color: '#fff', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{route.origin.split(',')[0]} → {route.destination.split(',')[0]}</div>
-                    <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{route.mode}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </>
       )}
     </div>
