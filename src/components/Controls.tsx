@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Navigation, MapPin, Bus, Train } from 'lucide-react';
+import { Navigation, MapPin, Bus, Train, Map as MapIcon, ChevronDown, ChevronUp } from 'lucide-react';
 import { Autocomplete } from '@react-google-maps/api';
 
 export type TransportMode = 'BUS' | 'TRAIN';
@@ -33,9 +33,10 @@ export default function Controls({
   transportMode,
   setTransportMode
 }: ControlsProps) {
-  
+
   const [autocompleteOrigin, setAutocompleteOrigin] = useState<google.maps.places.Autocomplete | null>(null);
   const [autocompleteDestination, setAutocompleteDestination] = useState<google.maps.places.Autocomplete | null>(null);
+  const [isMinimized, setIsMinimized] = useState(false);
 
   const formatTime = (offsetHours: number) => {
     const d = new Date();
@@ -74,112 +75,121 @@ export default function Controls({
   };
 
   return (
-    <div className="glass-panel" style={{
-      position: 'absolute',
-      top: '80px', // Adjusted to accommodate the new header
-      left: '24px',
-      width: '340px',
-      padding: '24px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '20px',
-      zIndex: 10
-    }}>
+    <div className="glass-panel controls-panel" style={isMinimized ? { paddingBottom: '24px', gap: 0 } : {}}>
 
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <button 
-          onClick={() => setTransportMode('BUS')}
-          style={{ 
-            flex: 1, 
-            background: transportMode === 'BUS' ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)',
-            color: transportMode === 'BUS' ? '#fff' : 'rgba(255,255,255,0.6)',
-            boxShadow: 'none'
-          }}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isMinimized ? 0 : '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <MapIcon size={20} color="#eab308" />
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 600, margin: 0 }}>Route Planner</h2>
+        </div>
+        <button
+          onClick={() => setIsMinimized(!isMinimized)}
+          style={{ padding: '4px', background: 'transparent', color: '#fff', width: 'auto', boxShadow: 'none' }}
         >
-          <Bus size={18} /> Bus
-        </button>
-        <button 
-          onClick={() => setTransportMode('TRAIN')}
-          style={{ 
-            flex: 1, 
-            background: transportMode === 'TRAIN' ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)',
-            color: transportMode === 'TRAIN' ? '#fff' : 'rgba(255,255,255,0.6)',
-            boxShadow: 'none'
-          }}
-        >
-          <Train size={18} /> Train
+          {isMinimized ? <ChevronUp size={24} /> : <ChevronDown size={24} />}
         </button>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <div style={{ position: 'relative' }}>
-          <MapPin size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'rgba(255,255,255,0.4)', zIndex: 2 }} />
-          <Autocomplete onLoad={onOriginLoad} onPlaceChanged={onOriginPlaceChanged}>
-            <input 
-              type="text" 
-              placeholder="Origin (e.g. Colombo Fort)" 
-              value={origin}
-              onChange={(e) => setOrigin(e.target.value)}
-              style={{ paddingLeft: '40px' }}
-            />
-          </Autocomplete>
-        </div>
-        <div style={{ position: 'relative' }}>
-          <Navigation size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'rgba(255,255,255,0.4)', zIndex: 2 }} />
-          <Autocomplete onLoad={onDestinationLoad} onPlaceChanged={onDestinationPlaceChanged}>
-            <input 
-              type="text" 
-              placeholder="Destination (e.g. Maharagama)" 
-              value={destination}
-              onChange={(e) => setDestination(e.target.value)}
-              style={{ paddingLeft: '40px' }}
-            />
-          </Autocomplete>
-        </div>
-      </div>
-
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '8px' }}>
-          <span>Departure Time</span>
-          <span style={{ color: 'var(--accent-color)', fontWeight: 600 }}>{formatTime(timeOffset)}</span>
-        </div>
-        <input 
-          type="range" 
-          min="0" 
-          max="6" 
-          step="0.5" 
-          value={timeOffset} 
-          onChange={(e) => setTimeOffset(parseFloat(e.target.value))} 
-        />
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>
-          <span>Now</span>
-          <span>+6 Hours</span>
-        </div>
-      </div>
-
-      <button onClick={onCalculate} disabled={isLoading || !origin || !destination}>
-        {isLoading ? 'Calculating...' : 'Find Best Side'}
-      </button>
-
-      {recommendation && (
-        <div style={{
-          marginTop: '8px',
-          padding: '16px',
-          borderRadius: '12px',
-          background: recommendation === 'Right' ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(37, 99, 235, 0.1))' : 
-                      recommendation === 'Left' ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.1))' :
-                      'rgba(255,255,255,0.05)',
-          border: '1px solid rgba(255,255,255,0.1)',
-          textAlign: 'center',
-          transition: 'all 0.3s ease'
-        }}>
-          <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)', marginBottom: '4px' }}>
-            Recommended Seat Side
+      {!isMinimized && (
+        <>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => setTransportMode('BUS')}
+              style={{
+                flex: 1,
+                background: transportMode === 'BUS' ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)',
+                color: transportMode === 'BUS' ? '#fff' : 'rgba(255,255,255,0.6)',
+                boxShadow: 'none'
+              }}
+            >
+              <Bus size={18} /> Bus
+            </button>
+            <button
+              onClick={() => setTransportMode('TRAIN')}
+              style={{
+                flex: 1,
+                background: transportMode === 'TRAIN' ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)',
+                color: transportMode === 'TRAIN' ? '#fff' : 'rgba(255,255,255,0.6)',
+                boxShadow: 'none'
+              }}
+            >
+              <Train size={18} /> Train
+            </button>
           </div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff' }}>
-            {recommendation}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ position: 'relative' }}>
+              <MapPin size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'rgba(255,255,255,0.4)', zIndex: 2 }} />
+              <Autocomplete onLoad={onOriginLoad} onPlaceChanged={onOriginPlaceChanged}>
+                <input
+                  type="text"
+                  placeholder="Origin (e.g. Colombo Fort)"
+                  value={origin}
+                  onChange={(e) => setOrigin(e.target.value)}
+                  style={{ paddingLeft: '40px' }}
+                />
+              </Autocomplete>
+            </div>
+            <div style={{ position: 'relative' }}>
+              <Navigation size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'rgba(255,255,255,0.4)', zIndex: 2 }} />
+              <Autocomplete onLoad={onDestinationLoad} onPlaceChanged={onDestinationPlaceChanged}>
+                <input
+                  type="text"
+                  placeholder="Destination (e.g. Maharagama)"
+                  value={destination}
+                  onChange={(e) => setDestination(e.target.value)}
+                  style={{ paddingLeft: '40px' }}
+                />
+              </Autocomplete>
+            </div>
           </div>
-        </div>
+
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '8px' }}>
+              <span>Departure Time</span>
+              <span style={{ color: 'var(--accent-color)', fontWeight: 600 }}>{formatTime(timeOffset)}</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="24"
+              step="0.5"
+              value={timeOffset}
+              onChange={(e) => setTimeOffset(parseFloat(e.target.value))}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>
+              <span>Now</span>
+              <span>+24 Hours</span>
+            </div>
+          </div>
+
+          <button onClick={() => {
+            onCalculate();
+          }} disabled={isLoading || !origin || !destination}>
+            {isLoading ? 'Calculating...' : 'Find Best Side'}
+          </button>
+
+          {recommendation && (
+            <div style={{
+              marginTop: '8px',
+              padding: '16px',
+              borderRadius: '12px',
+              background: recommendation === 'Right' ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(37, 99, 235, 0.1))' :
+                recommendation === 'Left' ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.1))' :
+                  'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              textAlign: 'center',
+              transition: 'all 0.3s ease'
+            }}>
+              <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)', marginBottom: '4px' }}>
+                Recommended Seat Side
+              </div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff' }}>
+                {recommendation}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
     </div>
