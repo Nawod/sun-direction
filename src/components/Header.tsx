@@ -22,7 +22,7 @@ export default function Header({ timezone, setTimezone }: HeaderProps) {
 
     // Initial load: Find the country that matches the provided timezone
     const localTz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const found = sorted.find(c => c.timezones.includes(localTz));
+    const found = sorted.find(c => (c.timezones as string[]).includes(localTz));
     if (found) {
       setSelectedCountry(found.id);
     }
