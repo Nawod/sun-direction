@@ -4,6 +4,7 @@ import { useCallback, useState, useMemo, useEffect } from 'react';
 import { GoogleMap, DirectionsRenderer, Polyline, OverlayView } from '@react-google-maps/api';
 import { getSunBearing, getMoonBearing, isNightTime } from '@/utils/sunMath';
 import { Sun, Moon } from 'lucide-react';
+import { formatInTimeZone } from 'date-fns-tz';
 
 const mapContainerStyle = {
   width: '100%',
@@ -39,10 +40,11 @@ const darkMapStyle = [
 
 interface MapProps {
   directions: google.maps.DirectionsResult | null;
-  targetTime: Date;
+  departureDate: Date;
+  timezone: string;
 }
 
-export default function Map({ directions, targetTime }: MapProps) {
+export default function Map({ directions, departureDate, timezone }: MapProps) {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [activePoint, setActivePoint] = useState<google.maps.LatLng | null>(null);
 
@@ -64,20 +66,64 @@ export default function Map({ directions, targetTime }: MapProps) {
     return directions.routes[0].overview_path;
   }, [directions]);
 
+  // Calculate points with exact timestamps for interpolation
+  const routePoints = useMemo(() => {
+    if (!directions) return [];
+    const steps = directions.routes[0].legs[0].steps;
+    const points: { lat: number, lng: number, timeMs: number }[] = [];
+    
+    let currentTimeMs = departureDate.getTime();
+    
+    for (const step of steps) {
+      const stepPath = step.path;
+      const stepDurationMs = (step.duration?.value || 0) * 1000;
+      const timePerPoint = stepPath.length > 1 ? stepDurationMs / (stepPath.length - 1) : 0;
+      
+      for (let i = 0; i < stepPath.length; i++) {
+        points.push({
+          lat: stepPath[i].lat(),
+          lng: stepPath[i].lng(),
+          timeMs: currentTimeMs + (timePerPoint * i)
+        });
+      }
+      currentTimeMs += stepDurationMs; 
+    }
+    return points;
+  }, [directions, departureDate]);
+
   const currentPoint = activePoint || (path.length > 0 ? path[0] : null);
   const isDefault = !activePoint;
 
+  // Find the interpolated time for the active point
+  const currentInterpolatedTime = useMemo(() => {
+    if (!activePoint || routePoints.length === 0) return departureDate;
+    
+    let closestTime = departureDate.getTime();
+    let minDistance = Infinity;
+    const aLat = activePoint.lat();
+    const aLng = activePoint.lng();
+    
+    for (const pt of routePoints) {
+      const dist = Math.pow(pt.lat - aLat, 2) + Math.pow(pt.lng - aLng, 2);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestTime = pt.timeMs;
+      }
+    }
+    return new Date(closestTime);
+  }, [activePoint, routePoints, departureDate]);
+
   const isNight = useMemo(() => {
     if (!currentPoint) return false;
-    return isNightTime(targetTime, currentPoint.lat(), currentPoint.lng());
-  }, [currentPoint, targetTime]);
+    return isNightTime(currentInterpolatedTime, currentPoint.lat(), currentPoint.lng());
+  }, [currentPoint, currentInterpolatedTime]);
 
   // Calculate sun/moon translation offset based on active point and time
   const sunTransform = useMemo(() => {
     if (!currentPoint) return '';
     const lat = currentPoint.lat();
     const lng = currentPoint.lng();
-    const bearing = isNight ? getMoonBearing(targetTime, lat, lng) : getSunBearing(targetTime, lat, lng);
+    const bearing = isNight ? getMoonBearing(currentInterpolatedTime, lat, lng) : getSunBearing(currentInterpolatedTime, lat, lng);
     
     // Convert standard bearing (0 is North) to radians
     // Screen math: North = -Y, East = +X
@@ -88,7 +134,7 @@ export default function Map({ directions, targetTime }: MapProps) {
     const y = -Math.cos(rad) * distancePixels;
     
     return `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
-  }, [currentPoint, targetTime, isNight]);
+  }, [currentPoint, currentInterpolatedTime, isNight]);
 
   return (
     <GoogleMap
@@ -108,22 +154,7 @@ export default function Map({ directions, targetTime }: MapProps) {
           <DirectionsRenderer
             directions={directions}
             options={{
-              polylineOptions: {
-                strokeOpacity: 0, // Hide default polyline so we can draw our interactive one
-              },
               suppressMarkers: false,
-            }}
-          />
-          
-          {/* Visible Line (No events attached so it doesn't block the invisible wide line) */}
-          <Polyline
-            path={path}
-            options={{
-              strokeColor: '#3b82f6',
-              strokeOpacity: 0.8,
-              strokeWeight: 6,
-              zIndex: 10,
-              clickable: false,
             }}
           />
 
@@ -157,8 +188,23 @@ export default function Map({ directions, targetTime }: MapProps) {
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
+                gap: '6px',
                 transition: 'transform 0.1s linear' // Smooth movement during time slider scrubbing
               }}>
+                <div style={{
+                  background: 'rgba(15, 23, 42, 0.7)',
+                  backdropFilter: 'blur(4px)',
+                  padding: '4px 10px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  color: '#fff',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap'
+                }}>
+                  {formatInTimeZone(currentInterpolatedTime, timezone, "h:mm a")}
+                </div>
+
                 <div style={{
                   background: isNight ? 'rgba(139, 92, 246, 0.2)' : 'rgba(234, 179, 8, 0.2)',
                   backdropFilter: 'blur(4px)',

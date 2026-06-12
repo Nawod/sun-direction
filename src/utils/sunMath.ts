@@ -105,27 +105,40 @@ export function isNightTime(time: Date, lat: number, lng: number): boolean {
   return position.altitude < 0;
 }
 
-export function calculateOverallBestSide(steps: Coordinates[], time: Date): { recommendation: string, leftCount: number, rightCount: number } {
-  if (steps.length === 0) return { recommendation: 'Either', leftCount: 0, rightCount: 0 };
-
-  const start = steps[0];
-  if (isNightTime(time, start.lat, start.lng)) {
-    return { recommendation: 'Night', leftCount: 0, rightCount: 0 };
-  }
+export function calculateOverallBestSide(legs: any[], departureTime: Date): { recommendation: string, leftCount: number, rightCount: number } {
+  if (legs.length === 0) return { recommendation: 'Either', leftCount: 0, rightCount: 0 };
+  const steps = legs[0].steps;
+  if (!steps || steps.length === 0) return { recommendation: 'Either', leftCount: 0, rightCount: 0 };
 
   let leftCount = 0;
   let rightCount = 0;
+  let currentTimeMs = departureTime.getTime();
+  let anyNight = false;
 
-  for (let i = 0; i < steps.length - 1; i++) {
-    const startStep = steps[i];
-    const endStep = steps[i + 1];
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    const stepStart = { lat: step.start_location.lat(), lng: step.start_location.lng() };
+    const stepEnd = { lat: step.end_location.lat(), lng: step.end_location.lng() };
     
-    const routeBearing = getBearing(startStep, endStep);
-    const sunBearing = getSunBearing(time, startStep.lat, startStep.lng);
+    const stepTime = new Date(currentTimeMs);
     
-    const side = getSunSide(routeBearing, sunBearing);
-    if (side === 'left') leftCount++;
-    if (side === 'right') rightCount++;
+    if (isNightTime(stepTime, stepStart.lat, stepStart.lng)) {
+      anyNight = true;
+    } else {
+      const routeBearing = getBearing(stepStart, stepEnd);
+      const sunBearing = getSunBearing(stepTime, stepStart.lat, stepStart.lng);
+      
+      const side = getSunSide(routeBearing, sunBearing);
+      if (side === 'left') leftCount++;
+      if (side === 'right') rightCount++;
+    }
+
+    currentTimeMs += (step.duration?.value || 0) * 1000;
+  }
+
+  // If the ENTIRE trip is night, return Night. If part is day, we have leftCount/rightCount.
+  if (leftCount === 0 && rightCount === 0 && anyNight) {
+    return { recommendation: 'Night', leftCount: 0, rightCount: 0 };
   }
 
   let recommendation = 'Either';
