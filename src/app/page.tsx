@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useJsApiLoader } from '@react-google-maps/api';
 import Map from '@/components/Map';
-import Controls from '@/components/Controls';
+import Controls, { TransportMode } from '@/components/Controls';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
 import { calculateOverallBestSide, Coordinates } from '@/utils/sunMath';
 
 const libraries: ("places")[] = ["places"];
@@ -16,6 +18,7 @@ export default function Home() {
   const [recommendation, setRecommendation] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [transportMode, setTransportMode] = useState<TransportMode>('BUS');
 
   useEffect(() => {
     setIsMounted(true);
@@ -38,12 +41,22 @@ export default function Home() {
 
     const directionsService = new window.google.maps.DirectionsService();
 
+    const routeRequest: google.maps.DirectionsRequest = {
+      origin: origin,
+      destination: destination,
+      travelMode: transportMode === 'TRAIN' 
+        ? window.google.maps.TravelMode.TRANSIT 
+        : window.google.maps.TravelMode.DRIVING,
+    };
+
+    if (transportMode === 'TRAIN') {
+      routeRequest.transitOptions = {
+        modes: [window.google.maps.TransitMode.TRAIN],
+      };
+    }
+
     directionsService.route(
-      {
-        origin: origin,
-        destination: destination,
-        travelMode: window.google.maps.TravelMode.DRIVING,
-      },
+      routeRequest,
       (result, status) => {
         setIsLoading(false);
         if (status === window.google.maps.DirectionsStatus.OK && result) {
@@ -59,7 +72,7 @@ export default function Home() {
           setRecommendation(rec);
           
         } else {
-          alert('Could not find route. Please check your locations.');
+          alert(`Could not find a ${transportMode.toLowerCase()} route. Please check your locations.`);
         }
       }
     );
@@ -90,6 +103,8 @@ export default function Home() {
 
   return (
     <main style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+      <Header />
+      
       <Map directions={directions} />
       
       <Controls 
@@ -102,7 +117,11 @@ export default function Home() {
         onCalculate={handleCalculate}
         recommendation={recommendation}
         isLoading={isLoading}
+        transportMode={transportMode}
+        setTransportMode={setTransportMode}
       />
+
+      <Footer />
     </main>
   );
 }

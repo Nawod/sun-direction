@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Sun, Navigation, MapPin } from 'lucide-react';
+import { Navigation, MapPin, Bus, Train } from 'lucide-react';
 import { Autocomplete } from '@react-google-maps/api';
+
+export type TransportMode = 'BUS' | 'TRAIN';
 
 interface ControlsProps {
   origin: string;
@@ -14,6 +16,8 @@ interface ControlsProps {
   setTimeOffset: (val: number) => void;
   recommendation: string | null;
   isLoading: boolean;
+  transportMode: TransportMode;
+  setTransportMode: (mode: TransportMode) => void;
 }
 
 export default function Controls({
@@ -25,7 +29,9 @@ export default function Controls({
   timeOffset,
   setTimeOffset,
   recommendation,
-  isLoading
+  isLoading,
+  transportMode,
+  setTransportMode
 }: ControlsProps) {
   
   const [autocompleteOrigin, setAutocompleteOrigin] = useState<google.maps.places.Autocomplete | null>(null);
@@ -70,7 +76,7 @@ export default function Controls({
   return (
     <div className="glass-panel" style={{
       position: 'absolute',
-      top: '24px',
+      top: '80px', // Adjusted to accommodate the new header
       left: '24px',
       width: '340px',
       padding: '24px',
@@ -79,14 +85,30 @@ export default function Controls({
       gap: '20px',
       zIndex: 10
     }}>
-      
-      <div>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Sun size={20} color="#eab308" /> Sun Direction
-        </h2>
-        <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>
-          Find the best side to sit to avoid the sun.
-        </p>
+
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <button 
+          onClick={() => setTransportMode('BUS')}
+          style={{ 
+            flex: 1, 
+            background: transportMode === 'BUS' ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)',
+            color: transportMode === 'BUS' ? '#fff' : 'rgba(255,255,255,0.6)',
+            boxShadow: 'none'
+          }}
+        >
+          <Bus size={18} /> Bus
+        </button>
+        <button 
+          onClick={() => setTransportMode('TRAIN')}
+          style={{ 
+            flex: 1, 
+            background: transportMode === 'TRAIN' ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)',
+            color: transportMode === 'TRAIN' ? '#fff' : 'rgba(255,255,255,0.6)',
+            boxShadow: 'none'
+          }}
+        >
+          <Train size={18} /> Train
+        </button>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
