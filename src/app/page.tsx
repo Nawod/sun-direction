@@ -29,6 +29,7 @@ export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
   const [transportMode, setTransportMode] = useState<TransportMode>('BUS');
   const [recentRoutes, setRecentRoutes] = useState<RecentRoute[]>([]);
+  const [autoCalculatePending, setAutoCalculatePending] = useState(false);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
@@ -51,6 +52,10 @@ export default function Home() {
       if (!isNaN(parsed.getTime())) setDepartureDate(parsed);
     } else {
       setDepartureDate(new Date());
+    }
+
+    if (params.get('origin') && params.get('dest')) {
+      setAutoCalculatePending(true);
     }
 
     try {
@@ -141,6 +146,14 @@ export default function Home() {
       }
     });
   };
+
+  useEffect(() => {
+    if (isLoaded && autoCalculatePending && origin && destination) {
+      setAutoCalculatePending(false);
+      handleCalculate();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, autoCalculatePending, origin, destination]);
 
   if (!isMounted) return null;
 

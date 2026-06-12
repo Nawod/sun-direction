@@ -262,8 +262,8 @@ export default function Controls({
               </div>
 
               {weatherOverride && recommendationResult.recommendation !== 'Night' && (
-                <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.8)', marginBottom: '12px', marginTop: '-8px' }}>
-                  Best Side (If Sunny): <strong>{recommendationResult.recommendation}</strong>
+                <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.8)', marginBottom: '36px', marginTop: '-6px' }}>
+                  Best Side (If Sunny): <strong style={{ color: '#eab308' }}>{recommendationResult.recommendation}</strong>
                 </div>
               )}
 
@@ -292,9 +292,9 @@ export default function Controls({
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)' }}>Trip Timeline</span>
                   <div style={{ display: 'flex', gap: '12px', fontSize: '0.7rem', color: 'rgba(255,255,255,0.6)' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#8b5cf6' }}/>Night</span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6' }}/>Left Sun</span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f97316' }}/>Right Sun</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#8b5cf6' }} />Night</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6' }} />Left Sun</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f97316' }} />Right Sun</span>
                   </div>
                 </div>
                 <div style={{ display: 'flex', height: '12px', borderRadius: '6px', overflow: 'hidden', marginTop: '6px' }}>
@@ -304,14 +304,14 @@ export default function Controls({
                     if (seg.status === 'night') { bg = '#8b5cf6'; label = 'Night'; }
                     if (seg.status === 'left') { bg = '#3b82f6'; label = 'Left Sun'; }
                     if (seg.status === 'right') { bg = '#f97316'; label = 'Right Sun'; }
-                    
+
                     const timeStr = formatInTimeZone(new Date(seg.timeMs), timezone, "h:mm a");
                     const mins = Math.round(seg.durationMs / 60000);
-                    
+
                     return (
-                      <div 
-                        key={i} 
-                        style={{ flex: seg.durationMs, backgroundColor: bg, transition: 'opacity 0.2s', cursor: 'help' }} 
+                      <div
+                        key={i}
+                        style={{ flex: seg.durationMs, backgroundColor: bg, transition: 'opacity 0.2s', cursor: 'help' }}
                         title={`${timeStr} • ${mins} mins (${label})`}
                         onMouseOver={(e) => e.currentTarget.style.opacity = '0.8'}
                         onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
