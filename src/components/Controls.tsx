@@ -261,7 +261,13 @@ export default function Controls({
                 {finalRec === 'Night' ? 'Night Time 🌙' : weatherOverride ? `${finalRec} - Sit Anywhere` : finalRec}
               </div>
 
-              {!weatherOverride && finalRec !== 'Night' && (
+              {weatherOverride && recommendationResult.recommendation !== 'Night' && (
+                <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.8)', marginBottom: '12px', marginTop: '-8px' }}>
+                  Best Side (If Sunny): <strong>{recommendationResult.recommendation}</strong>
+                </div>
+              )}
+
+              {finalRec !== 'Night' && recommendationResult.recommendation !== 'Night' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)' }}>
                     <span>Left Sun Exposure</span>
