@@ -8,6 +8,7 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { calculateOverallBestSide, RecommendationResult, findShadierTime } from '@/utils/sunMath';
 import { fetchWeather, WeatherData } from '@/utils/weather';
+import { Joyride, Step, STATUS } from 'react-joyride';
 
 const libraries: ("places")[] = ["places"];
 
@@ -31,6 +32,9 @@ export default function Home() {
   const [transportMode, setTransportMode] = useState<TransportMode>('BUS');
   const [recentRoutes, setRecentRoutes] = useState<RecentRoute[]>([]);
   const [autoCalculatePending, setAutoCalculatePending] = useState(false);
+  const [runTour, setRunTour] = useState(false);
+  const [tourKey, setTourKey] = useState(0);
+  const [isEditing, setIsEditing] = useState(true);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
@@ -43,7 +47,7 @@ export default function Home() {
   useEffect(() => {
     setIsMounted(true);
     setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
-    
+
     const params = new URLSearchParams(window.location.search);
     if (params.get('origin')) setOrigin(params.get('origin')!);
     if (params.get('dest')) setDestination(params.get('dest')!);
@@ -62,7 +66,16 @@ export default function Home() {
     try {
       const recents = JSON.parse(localStorage.getItem('sun-direction-recents') || '[]');
       setRecentRoutes(recents);
-    } catch(e){}
+    } catch (e) { }
+
+    const hasSeenTour = localStorage.getItem('sun-direction-tour');
+    if (!hasSeenTour) {
+      // Delay tour slightly so map and controls render
+      setTimeout(() => {
+        setRunTour(true);
+        localStorage.setItem('sun-direction-tour', 'true');
+      }, 1000);
+    }
   }, []);
 
   const saveRecent = (orig: string, dest: string, mode: TransportMode) => {
@@ -99,7 +112,7 @@ export default function Home() {
     const routeRequest: google.maps.DirectionsRequest = {
       origin: origin,
       destination: destination,
-      travelMode: window.google.maps.TravelMode.TRANSIT, 
+      travelMode: window.google.maps.TravelMode.TRANSIT,
     };
 
     if (transportMode === 'TRAIN') {
@@ -111,14 +124,14 @@ export default function Home() {
     const processResult = async (result: google.maps.DirectionsResult) => {
       setDirections(result);
       saveRecent(origin, destination, transportMode);
-      
+
       const legs = result.routes[0].legs;
       const recResult = calculateOverallBestSide(legs, departureDate);
       setRecommendationResult(recResult);
-      
+
       const shadier = findShadierTime(legs, departureDate, recResult.leftCount, recResult.rightCount);
       setShadierTime(shadier);
-      
+
       const path = result.routes[0].overview_path;
       if (path.length > 0) {
         const midPoint = path[Math.floor(path.length / 2)];
@@ -136,7 +149,7 @@ export default function Home() {
       } else if (transportMode === 'BUS' && status === window.google.maps.DirectionsStatus.ZERO_RESULTS) {
         routeRequest.travelMode = window.google.maps.TravelMode.DRIVING;
         delete routeRequest.transitOptions;
-        
+
         directionsService.route(routeRequest, (fallbackResult, fallbackStatus) => {
           if (fallbackStatus === window.google.maps.DirectionsStatus.OK && fallbackResult) {
             processResult(fallbackResult);
@@ -157,8 +170,45 @@ export default function Home() {
       setAutoCalculatePending(false);
       handleCalculate();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, autoCalculatePending, origin, destination]);
+
+  const handleJoyrideCallback = (data: any) => {
+    const { status } = data;
+    const finishedStatuses: string[] = [STATUS.FINISHED, STATUS.SKIPPED];
+
+    if (finishedStatuses.includes(status)) {
+      setRunTour(false);
+    }
+  };
+
+  const handleStartTour = () => {
+    setIsEditing(true);
+    setTourKey(prev => prev + 1); // Force remount to reset internal step index
+    setTimeout(() => {
+      setRunTour(true);
+    }, 100);
+  };
+
+  const tourSteps: Step[] = [
+    {
+      target: '.tour-mode',
+      content: 'Choose your ride. We calculate routes differently for buses vs trains.',
+      skipBeacon: true,
+    },
+    {
+      target: '.tour-route',
+      content: 'Enter your route here. You can also use the GPS button to find your current location.',
+    },
+    {
+      target: '.tour-time',
+      content: 'Pick your departure time. We use this to find exactly where the sun will be in the sky!',
+    },
+    {
+      target: '.tour-button',
+      content: 'Click here to run the physics engine and get your recommendation!',
+    }
+  ];
 
   if (!isMounted) return null;
 
@@ -185,11 +235,26 @@ export default function Home() {
 
   return (
     <main style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
-      <Header timezone={timezone} setTimezone={setTimezone} />
-      
+      <Joyride
+        key={tourKey}
+        steps={tourSteps}
+        run={runTour}
+        continuous={true}
+        onEvent={handleJoyrideCallback}
+        options={{
+          primaryColor: '#3b82f6',
+          backgroundColor: '#1e293b',
+          textColor: '#fff',
+          arrowColor: '#1e293b',
+          overlayColor: 'rgba(0, 0, 0, 0.6)'
+        }}
+      />
+
+      <Header timezone={timezone} setTimezone={setTimezone} onStartTour={handleStartTour} />
+
       <Map directions={directions} departureDate={departureDate} timezone={timezone} weather={weather} />
-      
-      <Controls 
+
+      <Controls
         origin={origin}
         setOrigin={setOrigin}
         destination={destination}
@@ -206,6 +271,9 @@ export default function Home() {
         transportMode={transportMode}
         setTransportMode={setTransportMode}
         recentRoutes={recentRoutes}
+        runTour={runTour}
+        isEditing={isEditing}
+        setIsEditing={setIsEditing}
       />
 
       <Footer />

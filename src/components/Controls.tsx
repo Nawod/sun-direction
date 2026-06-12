@@ -27,6 +27,9 @@ interface ControlsProps {
   transportMode: TransportMode;
   setTransportMode: (mode: TransportMode) => void;
   recentRoutes: RecentRoute[];
+  runTour?: boolean;
+  isEditing: boolean;
+  setIsEditing: (val: boolean) => void;
 }
 
 const VehicleGraphic = ({ mode, recommendation }: { mode: TransportMode, recommendation: string }) => {
@@ -84,14 +87,22 @@ export default function Controls({
   isLoading,
   transportMode,
   setTransportMode,
-  recentRoutes
+  recentRoutes,
+  runTour,
+  isEditing,
+  setIsEditing
 }: ControlsProps) {
   
   const [autocompleteOrigin, setAutocompleteOrigin] = useState<google.maps.places.Autocomplete | null>(null);
   const [autocompleteDestination, setAutocompleteDestination] = useState<google.maps.places.Autocomplete | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
   const [inputValue, setInputValue] = useState('');
-  const [isEditing, setIsEditing] = useState(true);
+
+  useEffect(() => {
+    if (runTour) {
+      setIsMinimized(false);
+    }
+  }, [runTour]);
 
   useEffect(() => {
     if (recommendationResult && !isLoading) {
@@ -204,7 +215,7 @@ export default function Controls({
         <>
           {isEditing ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div className="tour-mode" style={{ display: 'flex', gap: '8px' }}>
                 <button
                   onClick={() => setTransportMode('BUS')}
                   style={{
@@ -229,7 +240,7 @@ export default function Controls({
                 </button>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', position: 'relative' }}>
+              <div className="tour-route" style={{ display: 'flex', flexDirection: 'column', gap: '8px', position: 'relative' }}>
                 <div style={{ position: 'relative' }}>
                   <MapPin size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'rgba(255,255,255,0.4)', zIndex: 2 }} />
                   <Autocomplete onLoad={onOriginLoad} onPlaceChanged={onOriginPlaceChanged}>
@@ -268,7 +279,7 @@ export default function Controls({
                 </div>
               </div>
 
-              <div>
+              <div className="tour-time">
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '8px' }}>
                   <span>Departure Time ({timezone.split('/')[1] || timezone})</span>
                 </div>
@@ -290,7 +301,7 @@ export default function Controls({
                 />
               </div>
 
-              <button onClick={() => { setIsEditing(false); onCalculate(); }} disabled={isLoading || !origin || !destination}>
+              <button className="tour-button" onClick={() => { setIsEditing(false); onCalculate(); }} disabled={isLoading || !origin || !destination}>
                 Find Best Side
               </button>
 
