@@ -32,6 +32,10 @@ export default function Home() {
     libraries,
   });
 
+  // Calculate targetTime dynamically based on slider
+  const targetTime = new Date();
+  targetTime.setMinutes(targetTime.getMinutes() + (timeOffset * 60));
+
   const handleCalculate = () => {
     if (!origin || !destination) return;
     if (!window.google) return;
@@ -64,9 +68,6 @@ export default function Home() {
           
           const path = result.routes[0].overview_path;
           const steps: Coordinates[] = path.map(p => ({ lat: p.lat(), lng: p.lng() }));
-          
-          const targetTime = new Date();
-          targetTime.setMinutes(targetTime.getMinutes() + (timeOffset * 60));
           
           const { recommendation: rec } = calculateOverallBestSide(steps, targetTime);
           setRecommendation(rec);
@@ -105,7 +106,7 @@ export default function Home() {
     <main style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
       <Header />
       
-      <Map directions={directions} />
+      <Map directions={directions} targetTime={targetTime} />
       
       <Controls 
         origin={origin}
