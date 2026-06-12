@@ -2,6 +2,7 @@
 
 import { Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { getAllCountries } from 'countries-and-timezones';
 
 interface HeaderProps {
   timezone: string;
@@ -10,27 +11,31 @@ interface HeaderProps {
 
 export default function Header({ timezone, setTimezone }: HeaderProps) {
   const [mounted, setMounted] = useState(false);
-  const [timezones, setTimezones] = useState<{value: string, label: string}[]>([]);
+  const [countries, setCountries] = useState<any[]>([]);
+  const [selectedCountry, setSelectedCountry] = useState<string>('');
 
   useEffect(() => {
     setMounted(true);
-    const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const uniqueTzs = Array.from(new Set([
-      localTz,
-      'Asia/Colombo',
-      'America/New_York',
-      'America/Los_Angeles',
-      'Europe/London',
-      'Asia/Tokyo',
-      'Australia/Sydney',
-      'UTC'
-    ]));
-    
-    setTimezones(uniqueTzs.map(tz => ({
-      value: tz,
-      label: tz === localTz ? `Local (${tz})` : tz
-    })));
-  }, []);
+    const all = getAllCountries();
+    const sorted = Object.values(all).sort((a, b) => a.name.localeCompare(b.name));
+    setCountries(sorted);
+
+    // Initial load: Find the country that matches the provided timezone
+    const localTz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const found = sorted.find(c => c.timezones.includes(localTz));
+    if (found) {
+      setSelectedCountry(found.id);
+    }
+  }, [timezone]);
+
+  const handleCountryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const id = e.target.value;
+    setSelectedCountry(id);
+    const country = countries.find(c => c.id === id);
+    if (country && country.timezones.length > 0) {
+      setTimezone(country.timezones[0]);
+    }
+  };
 
   return (
     <header className="glass-panel header-panel">
@@ -42,8 +47,8 @@ export default function Header({ timezone, setTimezone }: HeaderProps) {
       {mounted && (
         <div>
           <select 
-            value={timezone}
-            onChange={(e) => setTimezone(e.target.value)}
+            value={selectedCountry}
+            onChange={handleCountryChange}
             style={{
               background: 'rgba(255,255,255,0.1)',
               border: '1px solid rgba(255,255,255,0.2)',
@@ -53,14 +58,19 @@ export default function Header({ timezone, setTimezone }: HeaderProps) {
               fontFamily: 'Outfit, sans-serif',
               fontSize: '0.9rem',
               outline: 'none',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              maxWidth: '200px',
+              textOverflow: 'ellipsis'
             }}
           >
-            {timezones.map(tz => (
-              <option key={tz.value} value={tz.value} style={{ background: '#1e293b' }}>
-                {tz.label}
-              </option>
-            ))}
+            {countries.map(c => {
+              if (c.timezones.length === 0) return null;
+              return (
+                <option key={c.id} value={c.id} style={{ background: '#1e293b' }}>
+                  {c.name}
+                </option>
+              );
+            })}
           </select>
         </div>
       )}

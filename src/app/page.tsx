@@ -47,29 +47,48 @@ export default function Home() {
     const routeRequest: google.maps.DirectionsRequest = {
       origin: origin,
       destination: destination,
-      travelMode: transportMode === 'TRAIN' 
-        ? window.google.maps.TravelMode.TRANSIT 
-        : window.google.maps.TravelMode.DRIVING,
+      travelMode: window.google.maps.TravelMode.TRANSIT, // Both use transit
     };
 
     if (transportMode === 'TRAIN') {
       routeRequest.transitOptions = {
         modes: [window.google.maps.TransitMode.TRAIN],
       };
+    } else if (transportMode === 'BUS') {
+      routeRequest.transitOptions = {
+        modes: [window.google.maps.TransitMode.BUS],
+      };
     }
 
     directionsService.route(
       routeRequest,
       (result, status) => {
-        setIsLoading(false);
         if (status === window.google.maps.DirectionsStatus.OK && result) {
+          setIsLoading(false);
           setDirections(result);
           
           const legs = result.routes[0].legs;
           const { recommendation: rec } = calculateOverallBestSide(legs, departureDate);
           setRecommendation(rec);
           
+        } else if (transportMode === 'BUS' && status === window.google.maps.DirectionsStatus.ZERO_RESULTS) {
+          // Fallback to Driving if explicit Bus route isn't mapped
+          routeRequest.travelMode = window.google.maps.TravelMode.DRIVING;
+          delete routeRequest.transitOptions;
+          
+          directionsService.route(routeRequest, (fallbackResult, fallbackStatus) => {
+            setIsLoading(false);
+            if (fallbackStatus === window.google.maps.DirectionsStatus.OK && fallbackResult) {
+              setDirections(fallbackResult);
+              const legs = fallbackResult.routes[0].legs;
+              const { recommendation: rec } = calculateOverallBestSide(legs, departureDate);
+              setRecommendation(rec);
+            } else {
+              alert(`Could not find a route. Please check your locations.`);
+            }
+          });
         } else {
+          setIsLoading(false);
           alert(`Could not find a ${transportMode.toLowerCase()} route. Please check your locations.`);
         }
       }
