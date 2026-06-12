@@ -6,9 +6,16 @@ import Map from '@/components/Map';
 import Controls, { TransportMode } from '@/components/Controls';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { calculateOverallBestSide } from '@/utils/sunMath';
+import { calculateOverallBestSide, RecommendationResult } from '@/utils/sunMath';
+import { fetchWeather, WeatherData } from '@/utils/weather';
 
 const libraries: ("places")[] = ["places"];
+
+export interface RecentRoute {
+  origin: string;
+  destination: string;
+  mode: TransportMode;
+}
 
 export default function Home() {
   const [origin, setOrigin] = useState('');
@@ -16,16 +23,12 @@ export default function Home() {
   const [departureDate, setDepartureDate] = useState<Date>(new Date());
   const [timezone, setTimezone] = useState<string>('UTC');
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
-  const [recommendation, setRecommendation] = useState<string | null>(null);
+  const [recommendationResult, setRecommendationResult] = useState<RecommendationResult | null>(null);
+  const [weather, setWeather] = useState<WeatherData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [transportMode, setTransportMode] = useState<TransportMode>('BUS');
-
-  useEffect(() => {
-    setIsMounted(true);
-    setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
-    setDepartureDate(new Date());
-  }, []);
+  const [recentRoutes, setRecentRoutes] = useState<RecentRoute[]>([]);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
@@ -35,64 +38,108 @@ export default function Home() {
     libraries,
   });
 
+  useEffect(() => {
+    setIsMounted(true);
+    setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('origin')) setOrigin(params.get('origin')!);
+    if (params.get('dest')) setDestination(params.get('dest')!);
+    if (params.get('mode') === 'TRAIN' || params.get('mode') === 'BUS') setTransportMode(params.get('mode') as TransportMode);
+    if (params.get('time')) {
+      const parsed = new Date(Number(params.get('time')));
+      if (!isNaN(parsed.getTime())) setDepartureDate(parsed);
+    } else {
+      setDepartureDate(new Date());
+    }
+
+    try {
+      const recents = JSON.parse(localStorage.getItem('sun-direction-recents') || '[]');
+      setRecentRoutes(recents);
+    } catch(e){}
+  }, []);
+
+  const saveRecent = (orig: string, dest: string, mode: TransportMode) => {
+    const newRoute = { origin: orig, destination: dest, mode };
+    setRecentRoutes(prev => {
+      const filtered = prev.filter(r => !(r.origin === orig && r.destination === dest));
+      const updated = [newRoute, ...filtered].slice(0, 5);
+      localStorage.setItem('sun-direction-recents', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const updateUrl = () => {
+    const params = new URLSearchParams();
+    params.set('origin', origin);
+    params.set('dest', destination);
+    params.set('mode', transportMode);
+    params.set('time', departureDate.getTime().toString());
+    window.history.replaceState(null, '', `?${params.toString()}`);
+  };
+
   const handleCalculate = () => {
     if (!origin || !destination) return;
     if (!window.google) return;
 
     setIsLoading(true);
-    setRecommendation(null);
+    setRecommendationResult(null);
+    setWeather(null);
+    updateUrl();
 
     const directionsService = new window.google.maps.DirectionsService();
 
     const routeRequest: google.maps.DirectionsRequest = {
       origin: origin,
       destination: destination,
-      travelMode: window.google.maps.TravelMode.TRANSIT, // Both use transit
+      travelMode: window.google.maps.TravelMode.TRANSIT, 
     };
 
     if (transportMode === 'TRAIN') {
-      routeRequest.transitOptions = {
-        modes: [window.google.maps.TransitMode.TRAIN],
-      };
+      routeRequest.transitOptions = { modes: [window.google.maps.TransitMode.TRAIN] };
     } else if (transportMode === 'BUS') {
-      routeRequest.transitOptions = {
-        modes: [window.google.maps.TransitMode.BUS],
-      };
+      routeRequest.transitOptions = { modes: [window.google.maps.TransitMode.BUS] };
     }
 
-    directionsService.route(
-      routeRequest,
-      (result, status) => {
-        if (status === window.google.maps.DirectionsStatus.OK && result) {
-          setIsLoading(false);
-          setDirections(result);
-          
-          const legs = result.routes[0].legs;
-          const { recommendation: rec } = calculateOverallBestSide(legs, departureDate);
-          setRecommendation(rec);
-          
-        } else if (transportMode === 'BUS' && status === window.google.maps.DirectionsStatus.ZERO_RESULTS) {
-          // Fallback to Driving if explicit Bus route isn't mapped
-          routeRequest.travelMode = window.google.maps.TravelMode.DRIVING;
-          delete routeRequest.transitOptions;
-          
-          directionsService.route(routeRequest, (fallbackResult, fallbackStatus) => {
-            setIsLoading(false);
-            if (fallbackStatus === window.google.maps.DirectionsStatus.OK && fallbackResult) {
-              setDirections(fallbackResult);
-              const legs = fallbackResult.routes[0].legs;
-              const { recommendation: rec } = calculateOverallBestSide(legs, departureDate);
-              setRecommendation(rec);
-            } else {
-              alert(`Could not find a route. Please check your locations.`);
-            }
-          });
-        } else {
-          setIsLoading(false);
-          alert(`Could not find a ${transportMode.toLowerCase()} route. Please check your locations.`);
-        }
+    const processResult = async (result: google.maps.DirectionsResult) => {
+      setDirections(result);
+      saveRecent(origin, destination, transportMode);
+      
+      const legs = result.routes[0].legs;
+      const recResult = calculateOverallBestSide(legs, departureDate);
+      setRecommendationResult(recResult);
+      
+      const path = result.routes[0].overview_path;
+      if (path.length > 0) {
+        const midPoint = path[Math.floor(path.length / 2)];
+        const durationSecs = legs[0].duration?.value || 0;
+        const midTime = new Date(departureDate.getTime() + (durationSecs / 2) * 1000);
+        const wData = await fetchWeather(midPoint.lat(), midPoint.lng(), midTime);
+        setWeather(wData);
       }
-    );
+      setIsLoading(false);
+    };
+
+    directionsService.route(routeRequest, (result, status) => {
+      if (status === window.google.maps.DirectionsStatus.OK && result) {
+        processResult(result);
+      } else if (transportMode === 'BUS' && status === window.google.maps.DirectionsStatus.ZERO_RESULTS) {
+        routeRequest.travelMode = window.google.maps.TravelMode.DRIVING;
+        delete routeRequest.transitOptions;
+        
+        directionsService.route(routeRequest, (fallbackResult, fallbackStatus) => {
+          if (fallbackStatus === window.google.maps.DirectionsStatus.OK && fallbackResult) {
+            processResult(fallbackResult);
+          } else {
+            setIsLoading(false);
+            alert(`Could not find a route. Please check your locations.`);
+          }
+        });
+      } else {
+        setIsLoading(false);
+        alert(`Could not find a ${transportMode.toLowerCase()} route. Please check your locations.`);
+      }
+    });
   };
 
   if (!isMounted) return null;
@@ -122,7 +169,7 @@ export default function Home() {
     <main style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
       <Header timezone={timezone} setTimezone={setTimezone} />
       
-      <Map directions={directions} departureDate={departureDate} timezone={timezone} />
+      <Map directions={directions} departureDate={departureDate} timezone={timezone} weather={weather} />
       
       <Controls 
         origin={origin}
@@ -133,10 +180,12 @@ export default function Home() {
         setDepartureDate={setDepartureDate}
         timezone={timezone}
         onCalculate={handleCalculate}
-        recommendation={recommendation}
+        recommendationResult={recommendationResult}
+        weather={weather}
         isLoading={isLoading}
         transportMode={transportMode}
         setTransportMode={setTransportMode}
+        recentRoutes={recentRoutes}
       />
 
       <Footer />
