@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, useMemo } from 'react';
+import { useCallback, useState, useMemo, useEffect } from 'react';
 import { GoogleMap, DirectionsRenderer, Polyline, OverlayView } from '@react-google-maps/api';
 import { getSunBearing } from '@/utils/sunMath';
 import { Sun } from 'lucide-react';
@@ -44,7 +44,7 @@ interface MapProps {
 
 export default function Map({ directions, targetTime }: MapProps) {
   const [map, setMap] = useState<google.maps.Map | null>(null);
-  const [hoverPoint, setHoverPoint] = useState<google.maps.LatLng | null>(null);
+  const [activePoint, setActivePoint] = useState<google.maps.LatLng | null>(null);
 
   const onLoad = useCallback(function callback(map: google.maps.Map) {
     setMap(map);
@@ -54,19 +54,24 @@ export default function Map({ directions, targetTime }: MapProps) {
     setMap(null);
   }, []);
 
+  // Reset point if the route itself changes entirely
+  useEffect(() => {
+    setActivePoint(null);
+  }, [directions]);
+
   const path = useMemo(() => {
     if (!directions) return [];
     return directions.routes[0].overview_path;
   }, [directions]);
 
-  const activePoint = hoverPoint || (path.length > 0 ? path[0] : null);
-  const isDefault = !hoverPoint;
+  const currentPoint = activePoint || (path.length > 0 ? path[0] : null);
+  const isDefault = !activePoint;
 
   // Calculate sun translation offset based on active point and time
   const sunTransform = useMemo(() => {
-    if (!activePoint) return '';
-    const lat = activePoint.lat();
-    const lng = activePoint.lng();
+    if (!currentPoint) return '';
+    const lat = currentPoint.lat();
+    const lng = currentPoint.lng();
     const sunBearing = getSunBearing(targetTime, lat, lng);
     
     // Convert standard bearing (0 is North) to radians
@@ -78,7 +83,7 @@ export default function Map({ directions, targetTime }: MapProps) {
     const y = -Math.cos(rad) * distancePixels;
     
     return `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
-  }, [activePoint, targetTime]);
+  }, [currentPoint, targetTime]);
 
   return (
     <GoogleMap
@@ -105,6 +110,7 @@ export default function Map({ directions, targetTime }: MapProps) {
             }}
           />
           
+          {/* Visible Line (No events attached so it doesn't block the invisible wide line) */}
           <Polyline
             path={path}
             options={{
@@ -112,18 +118,30 @@ export default function Map({ directions, targetTime }: MapProps) {
               strokeOpacity: 0.8,
               strokeWeight: 6,
               zIndex: 10,
-            }}
-            onMouseMove={(e) => {
-              if (e.latLng) setHoverPoint(e.latLng);
-            }}
-            onMouseOut={() => {
-              setHoverPoint(null);
+              clickable: false,
             }}
           />
 
-          {activePoint && (
+          {/* Invisible Wide Hit Area for easier hovering and touching */}
+          <Polyline
+            path={path}
+            options={{
+              strokeColor: '#000000',
+              strokeOpacity: 0.01, // Almost invisible
+              strokeWeight: 40,    // Very wide hit area
+              zIndex: 20,
+            }}
+            onMouseMove={(e) => {
+              if (e.latLng) setActivePoint(e.latLng);
+            }}
+            onClick={(e) => {
+              if (e.latLng) setActivePoint(e.latLng);
+            }}
+          />
+
+          {currentPoint && (
             <OverlayView
-              position={activePoint}
+              position={currentPoint}
               mapPaneName="overlayMouseTarget"
             >
               <div style={{
