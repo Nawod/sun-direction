@@ -6,7 +6,7 @@ import Map from '@/components/Map';
 import Controls, { TransportMode } from '@/components/Controls';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { calculateOverallBestSide, RecommendationResult } from '@/utils/sunMath';
+import { calculateOverallBestSide, RecommendationResult, findShadierTime } from '@/utils/sunMath';
 import { fetchWeather, WeatherData } from '@/utils/weather';
 
 const libraries: ("places")[] = ["places"];
@@ -24,6 +24,7 @@ export default function Home() {
   const [timezone, setTimezone] = useState<string>('UTC');
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [recommendationResult, setRecommendationResult] = useState<RecommendationResult | null>(null);
+  const [shadierTime, setShadierTime] = useState<Date | null>(null);
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -89,6 +90,7 @@ export default function Home() {
 
     setIsLoading(true);
     setRecommendationResult(null);
+    setShadierTime(null);
     setWeather(null);
     updateUrl();
 
@@ -113,6 +115,9 @@ export default function Home() {
       const legs = result.routes[0].legs;
       const recResult = calculateOverallBestSide(legs, departureDate);
       setRecommendationResult(recResult);
+      
+      const shadier = findShadierTime(legs, departureDate, recResult.leftCount, recResult.rightCount);
+      setShadierTime(shadier);
       
       const path = result.routes[0].overview_path;
       if (path.length > 0) {
@@ -194,6 +199,8 @@ export default function Home() {
         timezone={timezone}
         onCalculate={handleCalculate}
         recommendationResult={recommendationResult}
+        shadierTime={shadierTime}
+        steps={directions?.routes[0]?.legs[0]?.steps || []}
         weather={weather}
         isLoading={isLoading}
         transportMode={transportMode}

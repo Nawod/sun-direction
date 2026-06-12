@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Navigation, MapPin, Bus, Train, Map as MapIcon, ChevronDown, ChevronUp, ArrowUpDown, LocateFixed, Share2, History, CloudRain, Cloud } from 'lucide-react';
+import { Navigation, MapPin, Bus, Train, Map as MapIcon, ChevronDown, ChevronUp, ArrowUpDown, LocateFixed, Share2, History, CloudRain, Cloud, Sun, Moon } from 'lucide-react';
 import { Autocomplete } from '@react-google-maps/api';
 import { formatInTimeZone, toDate } from 'date-fns-tz';
 import { RecommendationResult } from '@/utils/sunMath';
@@ -20,12 +20,53 @@ interface ControlsProps {
   setDepartureDate: (val: Date) => void;
   timezone: string;
   recommendationResult: RecommendationResult | null;
+  shadierTime?: Date | null;
+  steps?: google.maps.DirectionsStep[];
   weather: WeatherData | null;
   isLoading: boolean;
   transportMode: TransportMode;
   setTransportMode: (mode: TransportMode) => void;
   recentRoutes: RecentRoute[];
 }
+
+const VehicleGraphic = ({ mode, recommendation }: { mode: TransportMode, recommendation: string }) => {
+  const isLeft = recommendation === 'Left';
+  const isRight = recommendation === 'Right';
+  
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '24px', marginBottom: '24px' }}>
+      <div style={{ position: 'relative', width: '60px', height: '130px' }}>
+        {isLeft && (
+          <div style={{ position: 'absolute', right: '-40px', top: '50%', transform: 'translateY(-50%)' }}>
+             <Sun size={24} color="#f97316" className="sun-pulse" />
+          </div>
+        )}
+        {isRight && (
+          <div style={{ position: 'absolute', left: '-40px', top: '50%', transform: 'translateY(-50%)' }}>
+             <Sun size={24} color="#f97316" className="sun-pulse" />
+          </div>
+        )}
+
+        <div style={{ 
+          width: '100%', height: '100%', 
+          backgroundColor: '#1e293b', 
+          border: '2px solid rgba(255,255,255,0.2)',
+          borderRadius: mode === 'BUS' ? '6px' : '16px 16px 4px 4px',
+          position: 'relative',
+          overflow: 'hidden',
+          boxShadow: isLeft ? 'inset 14px 0 20px rgba(59, 130, 246, 0.4)' : isRight ? 'inset -14px 0 20px rgba(59, 130, 246, 0.4)' : 'none'
+        }}>
+           <div style={{ position: 'absolute', top: '6px', left: '10%', right: '10%', height: mode === 'BUS' ? '18px' : '26px', backgroundColor: '#334155', borderRadius: '4px' }} />
+           <div style={{ position: 'absolute', top: '35px', left: '20%', right: '20%', bottom: '20px', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '2px' }} />
+           
+           {/* Highlight Side indicators */}
+           {isLeft && <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '6px', backgroundColor: '#3b82f6', opacity: 0.8 }} />}
+           {isRight && <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '6px', backgroundColor: '#3b82f6', opacity: 0.8 }} />}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function Controls({
   origin,
@@ -37,13 +78,15 @@ export default function Controls({
   setDepartureDate,
   timezone,
   recommendationResult,
+  shadierTime,
+  steps,
   weather,
   isLoading,
   transportMode,
   setTransportMode,
   recentRoutes
 }: ControlsProps) {
-
+  
   const [autocompleteOrigin, setAutocompleteOrigin] = useState<google.maps.places.Autocomplete | null>(null);
   const [autocompleteDestination, setAutocompleteDestination] = useState<google.maps.places.Autocomplete | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -67,7 +110,6 @@ export default function Controls({
     } catch (err) { console.error(err) }
   };
 
-  // Limit date picker to current date (min) and 3 days from now (max)
   const maxDate = new Date();
   maxDate.setDate(maxDate.getDate() + 3);
   let maxInputValue = '';
@@ -116,7 +158,6 @@ export default function Controls({
     }
   };
 
-  // Determine actual recommendation considering weather
   let finalRec = recommendationResult?.recommendation;
   let weatherOverride = false;
 
@@ -240,7 +281,11 @@ export default function Controls({
             {isLoading ? 'Calculating...' : 'Find Best Side'}
           </button>
 
-          {recommendationResult && (
+          {isLoading && (
+            <div className="skeleton-loader" style={{ height: '200px', borderRadius: '12px', marginTop: '8px' }} />
+          )}
+
+          {!isLoading && recommendationResult && (
             <div style={{
               marginTop: '8px',
               padding: '16px',
@@ -261,10 +306,14 @@ export default function Controls({
                 {finalRec === 'Night' ? 'Night Time 🌙' : weatherOverride ? `${finalRec} - Sit Anywhere` : finalRec}
               </div>
 
-              {weatherOverride && recommendationResult.recommendation !== 'Night' && (
+              {weatherOverride && recommendationResult.recommendation !== 'Night' && recommendationResult.recommendation !== 'Either' && (
                 <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.8)', marginBottom: '36px', marginTop: '-6px' }}>
                   Best Side (If Sunny): <strong style={{ color: '#eab308' }}>{recommendationResult.recommendation}</strong>
                 </div>
+              )}
+
+              {finalRec !== 'Night' && recommendationResult.recommendation !== 'Night' && recommendationResult.recommendation !== 'Either' && (
+                <VehicleGraphic mode={transportMode} recommendation={recommendationResult.recommendation} />
               )}
 
               {finalRec !== 'Night' && recommendationResult.recommendation !== 'Night' && (
@@ -320,10 +369,40 @@ export default function Controls({
                   })}
                 </div>
               </div>
+              
+              <div style={{ textAlign: 'center', marginTop: '16px', fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>
+                Calculated using accurate seasonal sun paths for {formatInTimeZone(departureDate, timezone, 'MMMM yyyy')}
+              </div>
             </div>
           )}
 
-          {recentRoutes.length > 0 && !recommendationResult && (
+          {shadierTime && !isLoading && (
+            <button 
+              onClick={() => {
+                setDepartureDate(shadierTime);
+                setTimeout(() => onCalculate(), 0);
+              }}
+              style={{ width: '100%', padding: '12px', background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.4)', borderRadius: '8px', marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: '#eab308', boxShadow: 'none', transition: 'all 0.2s' }}>
+              <Sun size={18} />
+              <span>💡 Tip: Leave at <strong>{formatInTimeZone(shadierTime, timezone, "h:mm a")}</strong> for less sun glare! [Apply]</span>
+            </button>
+          )}
+
+          {steps && steps.length > 0 && !isLoading && (
+            <details style={{ marginTop: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <summary style={{ cursor: 'pointer', fontSize: '0.85rem', color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>View Journey Steps</summary>
+              <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {steps.map((step, idx) => (
+                  <div key={idx} style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', borderLeft: '2px solid rgba(255,255,255,0.2)', paddingLeft: '12px' }}>
+                    <div dangerouslySetInnerHTML={{ __html: step.instructions }} className="step-instructions" />
+                    <div style={{ marginTop: '4px', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>{step.distance?.text} • {step.duration?.text}</div>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+
+          {recentRoutes.length > 0 && !recommendationResult && !isLoading && (
             <div style={{ marginTop: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', marginBottom: '8px' }}>
                 <History size={14} /> Recent Routes

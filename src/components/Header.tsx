@@ -1,6 +1,6 @@
 'use client';
 
-import { Sun } from 'lucide-react';
+import { Sun, Download } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { getAllCountries } from 'countries-and-timezones';
 
@@ -13,6 +13,7 @@ export default function Header({ timezone, setTimezone }: HeaderProps) {
   const [mounted, setMounted] = useState(false);
   const [countries, setCountries] = useState<any[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string>('');
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -26,6 +27,16 @@ export default function Header({ timezone, setTimezone }: HeaderProps) {
     if (found) {
       setSelectedCountry(found.id);
     }
+
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
   }, [timezone]);
 
   const handleCountryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -37,6 +48,16 @@ export default function Header({ timezone, setTimezone }: HeaderProps) {
     }
   };
 
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+      }
+    }
+  };
+
   return (
     <header className="glass-panel header-panel">
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -45,7 +66,15 @@ export default function Header({ timezone, setTimezone }: HeaderProps) {
       </div>
       
       {mounted && (
-        <div>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {deferredPrompt && (
+            <button 
+              onClick={handleInstallClick}
+              style={{ background: '#3b82f6', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '8px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.4)' }}
+            >
+              <Download size={16} /> Install App
+            </button>
+          )}
           <select 
             value={selectedCountry}
             onChange={handleCountryChange}

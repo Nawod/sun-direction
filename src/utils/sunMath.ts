@@ -219,3 +219,32 @@ export function calculateOverallBestSide(legs: any[], departureTime: Date): Reco
     timeline
   };
 }
+
+export function findShadierTime(legs: any[], currentDepartureDate: Date, originalLeft: number, originalRight: number): Date | null {
+  const originalExposure = originalLeft + originalRight;
+  if (originalExposure === 0) return null; // Already no sun
+
+  let bestTime: Date | null = null;
+  let lowestExposure = originalExposure;
+
+  // Search +/- 4 hours in 30 minute increments (-8 to +8)
+  for (let offset = -8; offset <= 8; offset++) {
+    if (offset === 0) continue;
+    const testDate = new Date(currentDepartureDate.getTime() + offset * 30 * 60000);
+    
+    // Don't suggest times in the past
+    if (testDate.getTime() < Date.now()) continue;
+
+    const res = calculateOverallBestSide(legs, testDate);
+    const testExposure = res.leftCount + res.rightCount;
+
+    // Look for at least a 30% reduction in total sun exposure
+    if (testExposure < lowestExposure && testExposure <= originalExposure * 0.7) {
+      lowestExposure = testExposure;
+      bestTime = testDate;
+    }
+  }
+
+  return bestTime;
+}
+
