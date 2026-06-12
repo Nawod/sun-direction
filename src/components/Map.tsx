@@ -2,8 +2,8 @@
 
 import { useCallback, useState, useMemo, useEffect } from 'react';
 import { GoogleMap, DirectionsRenderer, Polyline, OverlayView } from '@react-google-maps/api';
-import { getSunBearing } from '@/utils/sunMath';
-import { Sun } from 'lucide-react';
+import { getSunBearing, getMoonBearing, isNightTime } from '@/utils/sunMath';
+import { Sun, Moon } from 'lucide-react';
 
 const mapContainerStyle = {
   width: '100%',
@@ -67,23 +67,28 @@ export default function Map({ directions, targetTime }: MapProps) {
   const currentPoint = activePoint || (path.length > 0 ? path[0] : null);
   const isDefault = !activePoint;
 
-  // Calculate sun translation offset based on active point and time
+  const isNight = useMemo(() => {
+    if (!currentPoint) return false;
+    return isNightTime(targetTime, currentPoint.lat(), currentPoint.lng());
+  }, [currentPoint, targetTime]);
+
+  // Calculate sun/moon translation offset based on active point and time
   const sunTransform = useMemo(() => {
     if (!currentPoint) return '';
     const lat = currentPoint.lat();
     const lng = currentPoint.lng();
-    const sunBearing = getSunBearing(targetTime, lat, lng);
+    const bearing = isNight ? getMoonBearing(targetTime, lat, lng) : getSunBearing(targetTime, lat, lng);
     
     // Convert standard bearing (0 is North) to radians
     // Screen math: North = -Y, East = +X
-    const rad = (sunBearing * Math.PI) / 180;
+    const rad = (bearing * Math.PI) / 180;
     const distancePixels = 80; // Distance of sun from cursor
     
     const x = Math.sin(rad) * distancePixels;
     const y = -Math.cos(rad) * distancePixels;
     
     return `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
-  }, [currentPoint, targetTime]);
+  }, [currentPoint, targetTime, isNight]);
 
   return (
     <GoogleMap
@@ -155,27 +160,31 @@ export default function Map({ directions, targetTime }: MapProps) {
                 transition: 'transform 0.1s linear' // Smooth movement during time slider scrubbing
               }}>
                 <div style={{
-                  background: 'rgba(234, 179, 8, 0.2)',
+                  background: isNight ? 'rgba(139, 92, 246, 0.2)' : 'rgba(234, 179, 8, 0.2)',
                   backdropFilter: 'blur(4px)',
                   padding: isDefault ? '8px 16px' : '8px',
                   borderRadius: '50px',
-                  border: '1px solid rgba(234, 179, 8, 0.4)',
-                  boxShadow: '0 0 20px rgba(234, 179, 8, 0.3)',
+                  border: isNight ? '1px solid rgba(139, 92, 246, 0.4)' : '1px solid rgba(234, 179, 8, 0.4)',
+                  boxShadow: isNight ? '0 0 20px rgba(139, 92, 246, 0.3)' : '0 0 20px rgba(234, 179, 8, 0.3)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
                   whiteSpace: 'nowrap',
                   transition: 'all 0.3s ease'
                 }}>
-                  <Sun size={24} color="#eab308" style={{ minWidth: '24px' }} />
+                  {isNight ? (
+                    <Moon size={24} color="#a78bfa" style={{ minWidth: '24px' }} />
+                  ) : (
+                    <Sun size={24} color="#eab308" style={{ minWidth: '24px' }} />
+                  )}
                   {isDefault && (
                     <span style={{ 
-                      color: '#eab308', 
+                      color: isNight ? '#a78bfa' : '#eab308', 
                       fontSize: '0.8rem', 
                       fontWeight: 600,
                       textShadow: '0 2px 4px rgba(0,0,0,0.5)'
                     }}>
-                      Touch the route to track sun
+                      Touch the route to track {isNight ? 'moon' : 'sun'}
                     </span>
                   )}
                 </div>

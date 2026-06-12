@@ -176,16 +176,17 @@ export default function Controls({
               borderRadius: '12px',
               background: recommendation === 'Right' ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(37, 99, 235, 0.1))' :
                 recommendation === 'Left' ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.1))' :
+                recommendation === 'Night' ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(109, 40, 217, 0.1))' :
                   'rgba(255,255,255,0.05)',
               border: '1px solid rgba(255,255,255,0.1)',
               textAlign: 'center',
               transition: 'all 0.3s ease'
             }}>
               <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)', marginBottom: '4px' }}>
-                Recommended Seat Side
+                {recommendation === 'Night' ? 'No Sun Glare' : 'Recommended Seat Side'}
               </div>
               <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff' }}>
-                {recommendation}
+                {recommendation === 'Night' ? 'Night Time 🌙' : recommendation}
               </div>
             </div>
           )}

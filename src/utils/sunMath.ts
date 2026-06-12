@@ -92,26 +92,36 @@ export function getRecommendation(sunSide: 'left' | 'right' | 'front' | 'back'):
 /**
  * Aggregates the best side over multiple route steps.
  */
-export function calculateOverallBestSide(
-  steps: Coordinates[],
-  time: Date
-): {
-  recommendation: string;
-  leftCount: number;
-  rightCount: number;
-} {
-  if (steps.length < 2) return { recommendation: 'Unknown', leftCount: 0, rightCount: 0 };
+export function getMoonBearing(time: Date, lat: number, lng: number): number {
+  const position = SunCalc.getMoonPosition(time, lat, lng);
+  let bearing = (position.azimuth * 180) / Math.PI + 180;
+  if (bearing >= 360) bearing -= 360;
+  return bearing;
+}
+
+export function isNightTime(time: Date, lat: number, lng: number): boolean {
+  const position = SunCalc.getPosition(time, lat, lng);
+  // Altitude < 0 means sun is below horizon. We use 0 as a strict cutoff.
+  return position.altitude < 0;
+}
+
+export function calculateOverallBestSide(steps: Coordinates[], time: Date): { recommendation: string, leftCount: number, rightCount: number } {
+  if (steps.length === 0) return { recommendation: 'Either', leftCount: 0, rightCount: 0 };
+
+  const start = steps[0];
+  if (isNightTime(time, start.lat, start.lng)) {
+    return { recommendation: 'Night', leftCount: 0, rightCount: 0 };
+  }
 
   let leftCount = 0;
   let rightCount = 0;
 
   for (let i = 0; i < steps.length - 1; i++) {
-    const start = steps[i];
-    const end = steps[i + 1];
+    const startStep = steps[i];
+    const endStep = steps[i + 1];
     
-    const routeBearing = getBearing(start, end);
-    // Use the midpoint or just the start point for sun position
-    const sunBearing = getSunBearing(time, start.lat, start.lng);
+    const routeBearing = getBearing(startStep, endStep);
+    const sunBearing = getSunBearing(time, startStep.lat, startStep.lng);
     
     const side = getSunSide(routeBearing, sunBearing);
     if (side === 'left') leftCount++;
