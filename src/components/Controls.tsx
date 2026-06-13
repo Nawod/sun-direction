@@ -7,6 +7,8 @@ import { formatInTimeZone, toDate } from 'date-fns-tz';
 import { RecommendationResult } from '@/utils/sunMath';
 import { WeatherData } from '@/utils/weather';
 import { RecentRoute } from '@/app/page';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 export type TransportMode = 'BUS' | 'TRAIN';
 
@@ -110,23 +112,29 @@ export default function Controls({
     }
   }, [recommendationResult, isLoading]);
 
-  useEffect(() => {
+  const handleDatePickerChange = (date: Date | null) => {
+    if (!date) return;
+    // Extract the local wall-clock time from the datepicker
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    
+    const wallTimeString = `${year}-${month}-${day}T${hours}:${minutes}:00`;
+    
     try {
-      const formatted = formatInTimeZone(departureDate, timezone, "yyyy-MM-dd'T'HH:mm");
-      setInputValue(formatted);
-    } catch (e) { }
-  }, [departureDate, timezone]);
-
-  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInputValue(e.target.value);
-    if (!e.target.value) return;
-    try {
-      const parsed = toDate(e.target.value + ':00', { timeZone: timezone });
+      const parsed = toDate(wallTimeString, { timeZone: timezone });
       if (!isNaN(parsed.getTime())) {
         setDepartureDate(parsed);
       }
     } catch (err) { console.error(err) }
   };
+
+  // Convert the true UTC departureDate to a local Date object that represents the same wall-clock time in the target timezone
+  const dateParts = formatInTimeZone(departureDate, timezone, "yyyy-MM-dd-HH-mm-ss");
+  const [dpYear, dpMonth, dpDay, dpHours, dpMins, dpSecs] = dateParts.split('-').map(Number);
+  const displayDate = new Date(dpYear, dpMonth - 1, dpDay, dpHours, dpMins, dpSecs);
 
   const maxDate = new Date();
   maxDate.setDate(maxDate.getDate() + 3);
@@ -283,21 +291,20 @@ export default function Controls({
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '8px' }}>
                   <span>Departure Time ({timezone.split('/')[1] || timezone})</span>
                 </div>
-                <input
-                  type="datetime-local"
-                  value={inputValue}
-                  min={minInputValue}
-                  max={maxInputValue}
-                  onChange={handleDateChange}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    background: 'rgba(15, 23, 42, 0.6)',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    borderRadius: '8px',
-                    color: '#fff',
-                    fontFamily: 'Outfit, sans-serif'
-                  }}
+                <DatePicker
+                  selected={displayDate}
+                  onChange={handleDatePickerChange}
+                  showTimeSelect
+                  timeFormat="h:mm aa"
+                  timeIntervals={30}
+                  timeCaption="Time"
+                  dateFormat="MMMM d, yyyy h:mm aa"
+                  minDate={new Date()}
+                  maxDate={maxDate}
+                  className="custom-datepicker"
+                  calendarClassName="glass-calendar"
+                  wrapperClassName="datepicker-wrapper"
+                  portalId="datepicker-portal"
                 />
               </div>
 
