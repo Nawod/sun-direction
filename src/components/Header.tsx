@@ -62,8 +62,8 @@ export default function Header({ timezone, setTimezone, onStartTour }: HeaderPro
   return (
     <>
       <header className="glass-panel header-panel">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Sun size={28} color="#eab308" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Sun size={24} color="#eab308" className="header-logo" />
           <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Sun Direction</h1>
         </div>
 
@@ -84,23 +84,25 @@ export default function Header({ timezone, setTimezone, onStartTour }: HeaderPro
                 onClick={handleInstallClick}
                 style={{ background: '#3b82f6', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '8px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.4)' }}
               >
-                <Download size={16} /> Install App
+                <Download size={16} /> <span className="hide-on-mobile">Install</span>
               </button>
             )}
-            <select
+              <select
+              className="mobile-select"
               value={selectedCountry}
               onChange={handleCountryChange}
               style={{
                 background: 'rgba(255,255,255,0.1)',
                 border: '1px solid rgba(255,255,255,0.2)',
                 color: '#fff',
-                padding: '8px 12px',
+                padding: '6px 10px',
                 borderRadius: '8px',
                 fontFamily: 'Outfit, sans-serif',
-                fontSize: '0.9rem',
+                fontSize: '0.85rem',
                 outline: 'none',
                 cursor: 'pointer',
-                maxWidth: '200px',
+                maxWidth: '130px',
+                minWidth: '80px',
                 textOverflow: 'ellipsis'
               }}
             >
