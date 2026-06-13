@@ -3,8 +3,9 @@
 import { useCallback, useState, useMemo, useEffect } from 'react';
 import { GoogleMap, DirectionsRenderer, Polyline, OverlayView } from '@react-google-maps/api';
 import { getSunBearing, getMoonBearing, isNightTime } from '@/utils/sunMath';
-import { Sun, Moon } from 'lucide-react';
+import { Sun, Moon, Cloud, CloudRain } from 'lucide-react';
 import { formatInTimeZone } from 'date-fns-tz';
+import { WeatherData } from '@/utils/weather';
 
 const mapContainerStyle = {
   width: '100%',
@@ -42,9 +43,10 @@ interface MapProps {
   directions: google.maps.DirectionsResult | null;
   departureDate: Date;
   timezone: string;
+  weather?: WeatherData | null;
 }
 
-export default function Map({ directions, departureDate, timezone }: MapProps) {
+export default function Map({ directions, departureDate, timezone, weather }: MapProps) {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [activePoint, setActivePoint] = useState<google.maps.LatLng | null>(null);
 
@@ -216,19 +218,29 @@ export default function Map({ directions, departureDate, timezone }: MapProps) {
                   alignItems: 'center',
                   gap: '8px',
                   whiteSpace: 'nowrap',
-                  transition: 'all 0.3s ease'
+                  transition: 'all 0.3s ease',
+                  position: 'relative'
                 }}>
                   {isNight ? (
-                    <Moon size={24} color="#a78bfa" style={{ minWidth: '24px' }} />
+                    <Moon size={24} color="#a78bfa" style={{ minWidth: '24px', opacity: (weather?.isCloudy || weather?.isRainy) ? 0.3 : 1 }} />
                   ) : (
-                    <Sun size={24} color="#eab308" style={{ minWidth: '24px' }} />
+                    <Sun size={24} color="#eab308" style={{ minWidth: '24px', opacity: (weather?.isCloudy || weather?.isRainy) ? 0.3 : 1 }} />
                   )}
+
+                  {weather?.isRainy && (
+                    <CloudRain size={28} color="#9ca3af" style={{ position: 'absolute', left: isDefault ? 10 : 6, top: 6 }} />
+                  )}
+                  {!weather?.isRainy && weather?.isCloudy && (
+                    <Cloud size={28} color="#9ca3af" style={{ position: 'absolute', left: isDefault ? 10 : 6, top: 6 }} />
+                  )}
+
                   {isDefault && (
                     <span style={{ 
                       color: isNight ? '#a78bfa' : '#eab308', 
                       fontSize: '0.8rem', 
                       fontWeight: 600,
-                      textShadow: '0 2px 4px rgba(0,0,0,0.5)'
+                      textShadow: '0 2px 4px rgba(0,0,0,0.5)',
+                      marginLeft: (weather?.isCloudy || weather?.isRainy) ? '8px' : '0'
                     }}>
                       Touch the route to track {isNight ? 'moon' : 'sun'}
                     </span>

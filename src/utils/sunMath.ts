@@ -105,19 +105,32 @@ export function isNightTime(time: Date, lat: number, lng: number): boolean {
   return position.altitude < 0;
 }
 
-export function calculateOverallBestSide(legs: any[], departureTime: Date): { recommendation: string, leftCount: number, rightCount: number } {
-  if (legs.length === 0) return { recommendation: 'Either', leftCount: 0, rightCount: 0 };
+export interface TimelineSegment {
+  timeMs: number;
+  durationMs: number;
+  status: 'left' | 'right' | 'night' | 'neutral';
+}
+
+export interface RecommendationResult {
+  recommendation: string;
+  leftCount: number;
+  rightCount: number;
+  timeline: TimelineSegment[];
+}
+
+export function calculateOverallBestSide(legs: any[], departureTime: Date): RecommendationResult {
+  if (legs.length === 0) return { recommendation: 'Either', leftCount: 0, rightCount: 0, timeline: [] };
   const steps = legs[0].steps;
-  if (!steps || steps.length === 0) return { recommendation: 'Either', leftCount: 0, rightCount: 0 };
+  if (!steps || steps.length === 0) return { recommendation: 'Either', leftCount: 0, rightCount: 0, timeline: [] };
 
   let leftExposure = 0;
   let rightExposure = 0;
   let currentTimeMs = departureTime.getTime();
   let anyNight = false;
   let anyDay = false;
+  
+  const rawTimeline: TimelineSegment[] = [];
 
-  // We iterate over every single micro-segment of the journey's polyline
-  // to account for twisting roads and exact travel times.
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i];
     const path = step.path; 
@@ -137,8 +150,11 @@ export function calculateOverallBestSide(legs: any[], departureTime: Date): { re
       const segmentTime = new Date(currentTimeMs);
       const position = SunCalc.getPosition(segmentTime, pt1.lat, pt1.lng);
       
+      let currentStatus: 'left' | 'right' | 'night' | 'neutral' = 'neutral';
+      
       if (position.altitude < 0) {
         anyNight = true;
+        currentStatus = 'night';
       } else {
         anyDay = true;
         const routeBearing = getBearing(pt1, pt2);
@@ -147,41 +163,88 @@ export function calculateOverallBestSide(legs: any[], departureTime: Date): { re
         if (sunBearing >= 360) sunBearing -= 360;
         
         const side = getSunSide(routeBearing, sunBearing);
-        
-        // Harshness: Math.cos(altitude). 1.0 when sun is at horizon (direct glare through window)
-        // approaches 0 when sun is directly overhead (roof blocks it).
         const harshness = Math.max(0, Math.cos(position.altitude));
-        
-        // Exposure represents "seconds of harsh sunlight hitting this side of the bus"
         const exposure = (durationPerSegment / 1000) * harshness;
 
-        if (side === 'left') leftExposure += exposure;
-        if (side === 'right') rightExposure += exposure;
+        if (side === 'left') {
+          leftExposure += exposure;
+          currentStatus = 'left';
+        } else if (side === 'right') {
+          rightExposure += exposure;
+          currentStatus = 'right';
+        }
       }
+      
+      rawTimeline.push({
+        timeMs: segmentTime.getTime(),
+        durationMs: durationPerSegment,
+        status: currentStatus
+      });
       
       currentTimeMs += durationPerSegment;
     }
   }
 
-  // If the ENTIRE trip is at night
+  // Condense consecutive segments with the same status
+  const timeline: TimelineSegment[] = [];
+  for (const seg of rawTimeline) {
+    if (timeline.length === 0) {
+      timeline.push({ ...seg });
+    } else {
+      const last = timeline[timeline.length - 1];
+      if (last.status === seg.status) {
+        last.durationMs += seg.durationMs;
+      } else {
+        timeline.push({ ...seg });
+      }
+    }
+  }
+
   if (!anyDay && anyNight) {
-    return { recommendation: 'Night', leftCount: 0, rightCount: 0 };
+    return { recommendation: 'Night', leftCount: 0, rightCount: 0, timeline };
   }
 
   let recommendation = 'Either';
   
-  // Recommend the side with the LEAST sun exposure.
-  // Using a 10% threshold to avoid recommending a side if the difference is trivial.
   if (leftExposure > rightExposure * 1.1) {
-    recommendation = 'Right'; // Left gets more sun, sit Right
+    recommendation = 'Right';
   } else if (rightExposure > leftExposure * 1.1) {
-    recommendation = 'Left';  // Right gets more sun, sit Left
+    recommendation = 'Left';
   }
 
-  // Round values for easier debugging/display if needed
   return { 
     recommendation, 
     leftCount: Math.round(leftExposure), 
-    rightCount: Math.round(rightExposure) 
+    rightCount: Math.round(rightExposure),
+    timeline
   };
 }
+
+export function findShadierTime(legs: any[], currentDepartureDate: Date, originalLeft: number, originalRight: number): Date | null {
+  const originalExposure = originalLeft + originalRight;
+  if (originalExposure === 0) return null; // Already no sun
+
+  let bestTime: Date | null = null;
+  let lowestExposure = originalExposure;
+
+  // Search +/- 4 hours in 30 minute increments (-8 to +8)
+  for (let offset = -8; offset <= 8; offset++) {
+    if (offset === 0) continue;
+    const testDate = new Date(currentDepartureDate.getTime() + offset * 30 * 60000);
+    
+    // Don't suggest times in the past
+    if (testDate.getTime() < Date.now()) continue;
+
+    const res = calculateOverallBestSide(legs, testDate);
+    const testExposure = res.leftCount + res.rightCount;
+
+    // Look for at least a 30% reduction in total sun exposure
+    if (testExposure < lowestExposure && testExposure <= originalExposure * 0.7) {
+      lowestExposure = testExposure;
+      bestTime = testDate;
+    }
+  }
+
+  return bestTime;
+}
+
