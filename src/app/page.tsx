@@ -6,14 +6,15 @@ import Map from '@/components/Map';
 import Controls, { TransportMode } from '@/components/Controls';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { calculateOverallBestSide, Coordinates } from '@/utils/sunMath';
+import { calculateOverallBestSide } from '@/utils/sunMath';
 
 const libraries: ("places")[] = ["places"];
 
 export default function Home() {
   const [origin, setOrigin] = useState('');
   const [destination, setDestination] = useState('');
-  const [timeOffset, setTimeOffset] = useState(0);
+  const [departureDate, setDepartureDate] = useState<Date>(new Date());
+  const [timezone, setTimezone] = useState<string>('UTC');
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [recommendation, setRecommendation] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -22,6 +23,8 @@ export default function Home() {
 
   useEffect(() => {
     setIsMounted(true);
+    setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    setDepartureDate(new Date());
   }, []);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
@@ -44,34 +47,48 @@ export default function Home() {
     const routeRequest: google.maps.DirectionsRequest = {
       origin: origin,
       destination: destination,
-      travelMode: transportMode === 'TRAIN' 
-        ? window.google.maps.TravelMode.TRANSIT 
-        : window.google.maps.TravelMode.DRIVING,
+      travelMode: window.google.maps.TravelMode.TRANSIT, // Both use transit
     };
 
     if (transportMode === 'TRAIN') {
       routeRequest.transitOptions = {
         modes: [window.google.maps.TransitMode.TRAIN],
       };
+    } else if (transportMode === 'BUS') {
+      routeRequest.transitOptions = {
+        modes: [window.google.maps.TransitMode.BUS],
+      };
     }
 
     directionsService.route(
       routeRequest,
       (result, status) => {
-        setIsLoading(false);
         if (status === window.google.maps.DirectionsStatus.OK && result) {
+          setIsLoading(false);
           setDirections(result);
           
-          const path = result.routes[0].overview_path;
-          const steps: Coordinates[] = path.map(p => ({ lat: p.lat(), lng: p.lng() }));
-          
-          const targetTime = new Date();
-          targetTime.setMinutes(targetTime.getMinutes() + (timeOffset * 60));
-          
-          const { recommendation: rec } = calculateOverallBestSide(steps, targetTime);
+          const legs = result.routes[0].legs;
+          const { recommendation: rec } = calculateOverallBestSide(legs, departureDate);
           setRecommendation(rec);
           
+        } else if (transportMode === 'BUS' && status === window.google.maps.DirectionsStatus.ZERO_RESULTS) {
+          // Fallback to Driving if explicit Bus route isn't mapped
+          routeRequest.travelMode = window.google.maps.TravelMode.DRIVING;
+          delete routeRequest.transitOptions;
+          
+          directionsService.route(routeRequest, (fallbackResult, fallbackStatus) => {
+            setIsLoading(false);
+            if (fallbackStatus === window.google.maps.DirectionsStatus.OK && fallbackResult) {
+              setDirections(fallbackResult);
+              const legs = fallbackResult.routes[0].legs;
+              const { recommendation: rec } = calculateOverallBestSide(legs, departureDate);
+              setRecommendation(rec);
+            } else {
+              alert(`Could not find a route. Please check your locations.`);
+            }
+          });
         } else {
+          setIsLoading(false);
           alert(`Could not find a ${transportMode.toLowerCase()} route. Please check your locations.`);
         }
       }
@@ -103,17 +120,18 @@ export default function Home() {
 
   return (
     <main style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
-      <Header />
+      <Header timezone={timezone} setTimezone={setTimezone} />
       
-      <Map directions={directions} />
+      <Map directions={directions} departureDate={departureDate} timezone={timezone} />
       
       <Controls 
         origin={origin}
         setOrigin={setOrigin}
         destination={destination}
         setDestination={setDestination}
-        timeOffset={timeOffset}
-        setTimeOffset={setTimeOffset}
+        departureDate={departureDate}
+        setDepartureDate={setDepartureDate}
+        timezone={timezone}
         onCalculate={handleCalculate}
         recommendation={recommendation}
         isLoading={isLoading}
