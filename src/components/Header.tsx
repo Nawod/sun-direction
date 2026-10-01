@@ -2,14 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Sun, CircleHelp, Globe2, Download, ChevronDown } from 'lucide-react';
-import { getAllCountries } from 'countries-and-timezones';
 
 interface InstallEvent extends Event { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> }
 interface HeaderProps { timezone: string; setTimezone: (value: string) => void; onStartTour: () => void }
 
 export default function Header({ timezone, setTimezone, onStartTour }: HeaderProps) {
   const [install, setInstall] = useState<InstallEvent | null>(null);
-  const zones = useMemo<string[]>(() => [...new Set(Object.values(getAllCountries()).flatMap(country => country.timezones))].sort(), []);
+  const zones = useMemo<string[]>(() => Intl.supportedValuesOf('timeZone'), []);
   useEffect(() => {
     const handler = (event: Event) => { event.preventDefault(); setInstall(event as InstallEvent); };
     window.addEventListener('beforeinstallprompt', handler);

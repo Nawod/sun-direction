@@ -3,13 +3,11 @@
 import { useState } from 'react';
 import { ArrowDownUp, ArrowUpRight, BusFront, TrainFront, LocateFixed, CalendarDays, Clock3, History, Share2, Check, ChevronRight, Cloud, CloudRain, Moon, Sun, Pencil, LoaderCircle, Armchair } from 'lucide-react';
 import { formatInTimeZone, toDate } from 'date-fns-tz';
-import DatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
 import PlaceInput from './PlaceInput';
 import type { JourneyStep } from '@/utils/routes';
 import type { RecommendationResult } from '@/utils/sunMath';
 import type { WeatherData } from '@/utils/weather';
-import type { RecentRoute } from '@/app/page';
+import type { RecentRoute } from '@/components/JourneyPlanner';
 
 export type TransportMode = 'BUS' | 'TRAIN';
 interface ControlsProps {
@@ -24,20 +22,18 @@ interface ControlsProps {
   transportMode: TransportMode; setTransportMode: (mode: TransportMode) => void;
   recentRoutes: RecentRoute[];
   isEditing: boolean; setIsEditing: (value: boolean) => void;
-  routeError: string;
+  routeError: string; placesReady: boolean;
 }
 
-export default function Controls({ origin, setOrigin, destination, setDestination, onCalculate, departureDate, setDepartureDate, timezone, recommendationResult: result, shadierTime, steps = [], isDrivingFallback, routeWarnings = [], weather, isLoading, transportMode, setTransportMode, recentRoutes, isEditing, setIsEditing, routeError }: ControlsProps) {
+export default function Controls({ origin, setOrigin, destination, setDestination, onCalculate, departureDate, setDepartureDate, timezone, recommendationResult: result, shadierTime, steps = [], isDrivingFallback, routeWarnings = [], weather, isLoading, transportMode, setTransportMode, recentRoutes, isEditing, setIsEditing, routeError, placesReady }: ControlsProps) {
   const [notice, setNotice] = useState('');
   const [copied, setCopied] = useState(false);
   const [locating, setLocating] = useState(false);
-  const displayDate = new Date(formatInTimeZone(departureDate, timezone, "yyyy-MM-dd'T'HH:mm:ss"));
   const today = new Date(formatInTimeZone(new Date(), timezone, "yyyy-MM-dd'T'HH:mm:ss"));
   const maxDate = new Date(today); maxDate.setDate(maxDate.getDate() + 3);
-  const handleDate = (date: Date | null) => {
-    if (!date) return;
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const parsed = toDate(`${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:00`, { timeZone: timezone });
+  const handleDate = (value: string) => {
+    if (!value) return;
+    const parsed = toDate(value, { timeZone: timezone });
     if (!Number.isNaN(parsed.getTime())) setDepartureDate(parsed);
   };
   const locate = () => {
@@ -64,23 +60,25 @@ export default function Controls({ origin, setOrigin, destination, setDestinatio
       <div className="planner-title"><span className="section-dot" />Plan your trip</div>
       <h1>A better seat,{' '}<br />all the way.</h1>
       <p className="planner-intro">Find the shadier side of your bus or train before you go.</p>
-      {isEditing ? <form className="route-form" onSubmit={event => { event.preventDefault(); if (origin.trim() && destination.trim()) onCalculate(); }}>
-        <div className="mode-switch" aria-label="Travel mode"><button type="button" aria-pressed={transportMode === 'BUS'} onClick={() => setTransportMode('BUS')}><BusFront size={18} />Bus</button><button type="button" aria-pressed={transportMode === 'TRAIN'} onClick={() => setTransportMode('TRAIN')}><TrainFront size={18} />Train</button></div>
+      {isEditing ? <form aria-label="Plan a journey" className="route-form" onSubmit={event => { event.preventDefault(); if (origin.trim() && destination.trim()) onCalculate(); }}>
+        <div id="tour-mode" className="mode-switch" aria-label="Travel mode"><button type="button" aria-pressed={transportMode === 'BUS'} onClick={() => setTransportMode('BUS')}><BusFront size={18} />Bus</button><button type="button" aria-pressed={transportMode === 'TRAIN'} onClick={() => setTransportMode('TRAIN')}><TrainFront size={18} />Train</button></div>
         <div className="route-fields">
-          <div className="route-field"><i className="route-dot" /><label>From<PlaceInput value={origin} onChange={setOrigin} placeholder="Your starting point" /></label><button className="icon-button locate-button" type="button" onClick={locate} disabled={locating} aria-label="Use my current location">{locating ? <LoaderCircle className="spin" size={17} /> : <LocateFixed size={17} />}</button></div>
+          <div id="tour-origin" className="route-field"><i className="route-dot" /><label>From<PlaceInput ready={placesReady} value={origin} onChange={setOrigin} placeholder="Your starting point" /></label><button className="icon-button locate-button" type="button" onClick={locate} disabled={locating} aria-label="Use my current location">{locating ? <LoaderCircle className="spin" size={17} /> : <LocateFixed size={17} />}</button></div>
           <button type="button" className="swap-button" aria-label="Swap starting point and destination" onClick={() => { setOrigin(destination); setDestination(origin); }}><ArrowDownUp size={15} /></button>
-          <div className="route-field"><i className="route-dot destination-dot" /><label>To<PlaceInput value={destination} onChange={setDestination} placeholder="Where are you headed?" /></label></div>
+          <div id="tour-destination" className="route-field"><i className="route-dot destination-dot" /><label>To<PlaceInput ready={placesReady} value={destination} onChange={setDestination} placeholder="Where are you headed?" /></label></div>
         </div>
-        <div className="departure-field"><CalendarDays size={18} /><label htmlFor="departure-time">Leaving at<DatePicker id="departure-time" selected={displayDate} onChange={handleDate} showTimeSelect timeIntervals={15} timeFormat="h:mm aa" dateFormat="EEE, MMM d · h:mm aa" minDate={today} maxDate={maxDate} wrapperClassName="datepicker-wrapper" calendarClassName="journey-calendar" className="departure-input" portalId="datepicker-portal" /></label></div>
+        <div id="tour-departure" className="departure-field"><CalendarDays size={18} /><label htmlFor="departure-time">Leaving at<input id="departure-time" type="datetime-local" required value={formatInTimeZone(departureDate, timezone, "yyyy-MM-dd'T'HH:mm")} min={formatInTimeZone(new Date(), timezone, 'yyyy-MM-dd')+'T00:00'} max={`${maxDate.getFullYear()}-${String(maxDate.getMonth()+1).padStart(2,'0')}-${String(maxDate.getDate()).padStart(2,'0')}T23:59`} onChange={event=>handleDate(event.target.value)} className="departure-input" /></label></div>
         <p className="timezone-note"><Clock3 size={12} />Times in {timezone.split('/').pop()?.replaceAll('_', ' ')}</p>
-        <button className="primary-button" disabled={isLoading || !origin.trim() || !destination.trim()}>{isLoading ? <><LoaderCircle className="spin" size={17} />Finding your seat…</> : <>Find my shady side<ArrowUpRight size={19} /></>}</button>
+        <button id="tour-calculate" className="primary-button" disabled={!placesReady || isLoading || !origin.trim() || !destination.trim()}>{isLoading ? <><LoaderCircle className="spin" size={17} />Finding your seat…</> : <>Find my shady side<ArrowUpRight size={19} /></>}</button>
       </form> : <div className="trip-summary"><div><span>{transportMode === 'BUS' ? <BusFront size={15} /> : <TrainFront size={15} />}{transportMode === 'BUS' ? 'Bus journey' : 'Train journey'}</span><strong>{origin.split(',')[0]}<ChevronRight size={13} />{destination.split(',')[0]}</strong><small>{formatInTimeZone(departureDate, timezone, 'EEE, MMM d · h:mm a')}</small></div><button className="icon-button" aria-label="Edit journey" onClick={() => setIsEditing(true)}><Pencil size={16} /></button></div>}
       {(notice || routeError) && <p className="inline-error" role="alert">{routeError || notice}</p>}
       {isLoading && <div className="route-progress" role="status"><LoaderCircle className="spin" size={24} /><span>Following the sun along your route…</span></div>}
       {!isEditing && !isLoading && result && <section className="journey-result" aria-label="Seat recommendation">
+        <div id="seat-recommendation" tabIndex={-1} className="recommendation-hero" role="status">
         <div className="recommendation-label"><Check size={14} />Your best seat</div>
         <div className="seat-result"><h2>{side}</h2><Icon size={29} strokeWidth={1.5} /></div>
         <p>{night ? 'The sun is below the horizon. Sit wherever you like.' : cloudy ? 'Cloud cover or rain is forecast. Either side should be comfortable.' : either ? 'Sun exposure is similar on both sides.' : 'Facing forward, choose this side for less direct sunlight.'}</p>
+        </div>
         <div className="seat-diagram" aria-label={`Recommended seat: ${side}, facing forward`}><span>↑ Front of {transportMode === 'BUS' ? 'bus' : 'train'}</span><div className="vehicle-seats">{['Left','Right'].map(seatSide => <div key={seatSide} className={either || result.recommendation === seatSide ? 'recommended-seats' : ''}>{[0,1,2].map(i => <Armchair size={20} key={i} />)}<small>{seatSide}</small></div>)}</div></div>
         {!either && reduction > 0 && <p className="exposure-saving"><strong>{reduction}%</strong> less estimated sun than the other side</p>}
         {cloudy && !night && result.recommendation !== 'Either' && <small>If the sky clears, choose the {result.recommendation.toLowerCase()} side.</small>}

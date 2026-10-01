@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { GoogleMap, OverlayView, Polyline } from '@react-google-maps/api';
 import { Sun, Moon, LocateFixed, Layers2, Compass, MapPin, Route, CloudSun, ChevronLeft, ChevronRight } from 'lucide-react';
 import SunCalc from 'suncalc';
@@ -22,19 +22,23 @@ const styles: google.maps.MapTypeStyle[] = [
 ];
 interface MapProps { directions: RoutePlan | null; departureDate: Date; timezone: string; weather: WeatherData | null; transportMode: 'BUS' | 'TRAIN'; recommendationResult: RecommendationResult | null }
 
-export default function Map({ directions, departureDate, timezone, weather, transportMode, recommendationResult }: MapProps) {
+export default memo(function Map({ directions, departureDate, timezone, weather, transportMode, recommendationResult }: MapProps) {
   const [map,setMap] = useState<google.maps.Map | null>(null);
   const [selection,setSelection] = useState({ route:directions, index:0 });
   const [showSun,setShowSun] = useState(true);
   const [satellite,setSatellite] = useState(false);
+  const options=useMemo<google.maps.MapOptions>(()=>({styles,disableDefaultUI:true,zoomControl:true,zoomControlOptions:{position:google.maps.ControlPosition.INLINE_END_BLOCK_CENTER},gestureHandling:'cooperative',clickableIcons:false,mapTypeId:satellite?'satellite':'roadmap'}),[satellite]);
   const samples = useMemo(() => {
     const steps=directions?.legs.flatMap(leg=>leg.steps)||[];
-    return steps.flatMap((step,stepIndex)=>{
-      const elapsed=steps.slice(0,stepIndex).reduce((total,item)=>total+item.duration.value*1000,0);
+    const result: {point:google.maps.LatLng;time:Date}[]=[];
+    let elapsed=0;
+    for (const step of steps) {
       const duration=step.duration.value*1000;
       const points=step.path.map((point,i)=>({ point, time:new Date(departureDate.getTime()+elapsed+duration*i/Math.max(1,step.path.length-1)) }));
-      return points;
-    });
+      result.push(...points);
+      elapsed+=duration;
+    }
+    return result;
   },[directions,departureDate]);
   const index=selection.route===directions ? Math.min(selection.index,Math.max(0,samples.length-1)) : 0;
   const current=samples[index];
@@ -52,14 +56,14 @@ export default function Map({ directions, departureDate, timezone, weather, tran
     if(!map)return;
     if(!directions){map.panTo(center);map.setZoom(11);return;}
     const bounds=new google.maps.LatLngBounds();directions.path.forEach(point=>bounds.extend(point));
-    map.fitBounds(bounds,{top:175,right:65,bottom:300,left:65});
+    map.fitBounds(bounds,{top:175,right:40,bottom:map.getDiv().clientWidth<600?100:330,left:40});
   };
   useEffect(()=>{
     if(!map||!directions)return;
     const polylines=directions.route.createPolylines({polylineOptions:{strokeColor:'#286550',strokeWeight:5}});
     polylines.forEach(line=>line.setMap(map));
     const bounds=new google.maps.LatLngBounds();directions.path.forEach(point=>bounds.extend(point));
-    map.fitBounds(bounds,{top:175,right:65,bottom:300,left:65});
+    map.fitBounds(bounds,{top:175,right:40,bottom:map.getDiv().clientWidth<600?100:330,left:40});
     return()=>polylines.forEach(line=>line.setMap(null));
   },[map,directions]);
   const select=(i:number,pan=false)=>{
@@ -72,8 +76,8 @@ export default function Map({ directions, departureDate, timezone, weather, tran
     samples.forEach((sample,i)=>{const d=(sample.point.lat()-point.lat())**2+(sample.point.lng()-point.lng())**2;if(d<distance){distance=d;best=i;}});select(best);
   };
   return <section id="journey-map" className="map-stage" aria-label="Journey map and sun explorer" tabIndex={-1}>
-    <GoogleMap mapContainerClassName="map-canvas" center={center} zoom={11} onLoad={setMap} onUnmount={()=>setMap(null)} options={{styles,disableDefaultUI:true,zoomControl:true,zoomControlOptions:{position:google.maps.ControlPosition.INLINE_END_BLOCK_CENTER},gestureHandling:'cooperative',clickableIcons:false,mapTypeId:satellite?'satellite':'roadmap'}}>
-      {directions && <><Polyline path={directions.path} options={{strokeOpacity:.01,strokeWeight:35,zIndex:20}} onMouseMove={event=>nearest(event.latLng)} onClick={event=>nearest(event.latLng)} />{[directions.path[0],directions.path.at(-1)].map((point,i)=>point&&<OverlayView key={i} position={point} mapPaneName="overlayMouseTarget"><span className="map-waypoint">{i?'B':'A'}</span></OverlayView>)}</>}
+    <GoogleMap mapContainerClassName="map-canvas" center={center} zoom={11} onLoad={setMap} onUnmount={()=>setMap(null)} options={options}>
+      {directions && <><Polyline path={directions.path} options={{strokeOpacity:.01,strokeWeight:35,zIndex:20}} onClick={event=>nearest(event.latLng)} />{[directions.path[0],directions.path.at(-1)].map((point,i)=>point&&<OverlayView key={i} position={point} mapPaneName="overlayMouseTarget"><span className="map-waypoint">{i?'B':'A'}</span></OverlayView>)}</>}
       {showSun && <OverlayView position={current?.point||center} mapPaneName="overlayLayer"><SunCompass azimuth={azimuth} altitude={altitude} heading={heading} preview={!current} mode={transportMode} /></OverlayView>}
       {current && <OverlayView position={current.point} mapPaneName="overlayLayer"><span className="route-position-dot" /></OverlayView>}
     </GoogleMap>
@@ -86,5 +90,5 @@ export default function Map({ directions, departureDate, timezone, weather, tran
       {directions ? <><div className="sun-measurements"><div><span>Journey time</span><strong>{formatInTimeZone(time,timezone,'h:mm a')}</strong></div><div><span>Sun elevation</span><strong>{Math.round(altitude*180/Math.PI)}<small>°</small></strong></div><div><span>Compass bearing</span><strong>{Math.round(azimuth)}<small>°</small></strong></div></div><div className="journey-slider"><button className="icon-button" aria-label="Previous point on route" disabled={index===0} onClick={()=>select(index-1,true)}><ChevronLeft size={16}/></button><input id="journey-position" aria-label="Position along journey" type="range" min="0" max={Math.max(0,samples.length-1)} value={index} onChange={event=>select(Number(event.target.value),true)}/><button className="icon-button" aria-label="Next point on route" disabled={index===samples.length-1} onClick={()=>select(index+1,true)}><ChevronRight size={16}/></button></div><div className="timeline-labels"><span>Departure</span><span>Move along your route</span><span>Arrival</span></div>{recommendationResult&&<div className="exposure-strip" aria-label="Sun exposure over the journey">{recommendationResult.timeline.map((segment,i)=><span key={i} className={`exposure-${segment.status}`} style={{flex:Math.max(segment.durationMs,1)}} title={`${formatInTimeZone(segment.timeMs,timezone,'h:mm a')}: ${segment.status}`}/>)}</div>}<div className="explorer-footnote"><span><i className="legend-dot"/>Sun on left<i className="legend-dot right"/>Sun on right</span><span>{weather?.isRainy?'Rain forecast':weather?.isCloudy?'Cloudy forecast':'Estimated sunlight'}</span></div></> : <div className="explorer-empty"><div><MapPin size={16}/><span>Choose your route</span></div><div><Clock3Icon/><span>Set your departure</span></div><div><CloudSun size={17}/><span>Find your shady side</span></div></div>}
     </section>
   </section>;
-}
+});
 function Clock3Icon(){return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>;}

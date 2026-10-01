@@ -3,17 +3,19 @@
 import { useEffect, useRef, useState } from 'react';
 
 interface PlaceInputProps {
+  ready: boolean;
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
 }
 
-export default function PlaceInput({ value, onChange, placeholder }: PlaceInputProps) {
+export default function PlaceInput({ value, onChange, placeholder, ready }: PlaceInputProps) {
   const container = useRef<HTMLDivElement>(null);
   const widget = useRef<google.maps.places.PlaceAutocompleteElement | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (!ready) return;
     const element = new google.maps.places.PlaceAutocompleteElement({
       placeholder,
       noInputIcon: true,
@@ -59,15 +61,16 @@ export default function PlaceInput({ value, onChange, placeholder }: PlaceInputP
       element.remove();
       widget.current = null;
     };
-  }, [onChange, placeholder]);
+  }, [onChange, placeholder, ready]);
 
   useEffect(() => {
     if (widget.current && widget.current.value !== value) widget.current.value = value;
-  }, [value]);
+  }, [value, ready]);
 
   return (
     <>
       <div ref={container} />
+      {!ready && <input className="place-loading" placeholder="Loading place search…" aria-label={placeholder} disabled />}
       {error && <p role="alert" style={{ fontSize: '0.8rem', color: '#a33b2f', marginTop: '6px' }}>{error}</p>}
     </>
   );
