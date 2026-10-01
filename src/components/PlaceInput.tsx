@@ -68,7 +68,7 @@ export default function PlaceInput({ value, onChange, placeholder }: PlaceInputP
   return (
     <>
       <div ref={container} />
-      {error && <p role="alert" style={{ fontSize: '0.8rem', color: '#fca5a5', marginTop: '6px' }}>{error}</p>}
+      {error && <p role="alert" style={{ fontSize: '0.8rem', color: '#a33b2f', marginTop: '6px' }}>{error}</p>}
     </>
   );
 }
