@@ -1,26 +1,21 @@
 'use client';
-
-import { useState, useEffect } from 'react';
-import { Navigation, MapPin, Bus, Train, Map as MapIcon, ChevronDown, ChevronUp, ArrowUpDown, LocateFixed, Share2, History, CloudRain, Cloud, Sun, Moon } from 'lucide-react';
-import PlaceInput from './PlaceInput';
-import { JourneyStep } from '@/utils/routes';
+import { useState } from 'react';
+import { ArrowDownUp, ArrowRight, BusFront, TrainFront, LocateFixed, CalendarDays, Clock3, History, Share2, Check, ChevronRight, Cloud, CloudRain, Moon, Sun, Pencil, LoaderCircle } from 'lucide-react';
 import { formatInTimeZone, toDate } from 'date-fns-tz';
-import { RecommendationResult } from '@/utils/sunMath';
-import { WeatherData } from '@/utils/weather';
-import { RecentRoute } from '@/app/page';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+import PlaceInput from './PlaceInput';
+import type { JourneyStep } from '@/utils/routes';
+import type { RecommendationResult } from '@/utils/sunMath';
+import type { WeatherData } from '@/utils/weather';
+import type { RecentRoute } from '@/app/page';
 
 export type TransportMode = 'BUS' | 'TRAIN';
-
 interface ControlsProps {
-  origin: string;
-  setOrigin: (val: string) => void;
-  destination: string;
-  setDestination: (val: string) => void;
+  origin: string; setOrigin: (value: string) => void;
+  destination: string; setDestination: (value: string) => void;
   onCalculate: () => void;
-  departureDate: Date;
-  setDepartureDate: (val: Date) => void;
+  departureDate: Date; setDepartureDate: (value: Date) => void;
   timezone: string;
   recommendationResult: RecommendationResult | null;
   shadierTime?: Date | null;
@@ -29,439 +24,87 @@ interface ControlsProps {
   routeWarnings?: string[];
   weather: WeatherData | null;
   isLoading: boolean;
-  transportMode: TransportMode;
-  setTransportMode: (mode: TransportMode) => void;
+  transportMode: TransportMode; setTransportMode: (mode: TransportMode) => void;
   recentRoutes: RecentRoute[];
   runTour?: boolean;
-  isEditing: boolean;
-  setIsEditing: (val: boolean) => void;
+  isEditing: boolean; setIsEditing: (value: boolean) => void;
+  routeError?: string;
 }
 
-const VehicleGraphic = ({ mode, recommendation }: { mode: TransportMode, recommendation: string }) => {
-  const isLeft = recommendation === 'Left';
-  const isRight = recommendation === 'Right';
-  
-  return (
-    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '24px', marginBottom: '24px' }}>
-      <div style={{ position: 'relative', width: '60px', height: '130px' }}>
-        {isLeft && (
-          <div style={{ position: 'absolute', right: '-40px', top: '50%', transform: 'translateY(-50%)' }}>
-             <Sun size={24} color="#f97316" className="sun-pulse" />
-          </div>
-        )}
-        {isRight && (
-          <div style={{ position: 'absolute', left: '-40px', top: '50%', transform: 'translateY(-50%)' }}>
-             <Sun size={24} color="#f97316" className="sun-pulse" />
-          </div>
-        )}
-
-        <div style={{ 
-          width: '100%', height: '100%', 
-          backgroundColor: '#1e293b', 
-          border: '2px solid rgba(255,255,255,0.2)',
-          borderRadius: mode === 'BUS' ? '6px' : '16px 16px 4px 4px',
-          position: 'relative',
-          overflow: 'hidden',
-          boxShadow: isLeft ? 'inset 14px 0 20px rgba(59, 130, 246, 0.4)' : isRight ? 'inset -14px 0 20px rgba(59, 130, 246, 0.4)' : 'none'
-        }}>
-           <div style={{ position: 'absolute', top: '6px', left: '10%', right: '10%', height: mode === 'BUS' ? '18px' : '26px', backgroundColor: '#334155', borderRadius: '4px' }} />
-           <div style={{ position: 'absolute', top: '35px', left: '20%', right: '20%', bottom: '20px', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '2px' }} />
-           
-           {/* Highlight Side indicators */}
-           {isLeft && <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '6px', backgroundColor: '#3b82f6', opacity: 0.8 }} />}
-           {isRight && <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '6px', backgroundColor: '#3b82f6', opacity: 0.8 }} />}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default function Controls({
-  origin,
-  setOrigin,
-  destination,
-  setDestination,
-  onCalculate,
-  departureDate,
-  setDepartureDate,
-  timezone,
-  recommendationResult,
-  shadierTime,
-  steps,
-  isDrivingFallback,
-  routeWarnings,
-  weather,
-  isLoading,
-  transportMode,
-  setTransportMode,
-  recentRoutes,
-  runTour,
-  isEditing,
-  setIsEditing
-}: ControlsProps) {
-  
-  const [isMinimized, setIsMinimized] = useState(false);
-  const [inputValue, setInputValue] = useState('');
-
-  useEffect(() => {
-    if (runTour) {
-      setIsMinimized(false);
-    }
-  }, [runTour]);
-
-  useEffect(() => {
-    if (recommendationResult && !isLoading) {
-      setIsEditing(false);
-    }
-  }, [recommendationResult, isLoading]);
-
-  const handleDatePickerChange = (date: Date | null) => {
+export default function Controls({ origin, setOrigin, destination, setDestination, onCalculate, departureDate, setDepartureDate, timezone, recommendationResult, shadierTime, steps = [], isDrivingFallback, routeWarnings = [], weather, isLoading, transportMode, setTransportMode, recentRoutes, isEditing, setIsEditing, routeError }: ControlsProps) {
+  const [notice, setNotice] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const wallTime = formatInTimeZone(departureDate, timezone, 'yyyy-MM-dd HH:mm:ss');
+  const displayDate = new Date(wallTime.replace(' ', 'T'));
+  const maxDate = new Date(); maxDate.setDate(maxDate.getDate() + 3);
+  const handleDate = (date: Date | null) => {
     if (!date) return;
-    // Extract the local wall-clock time from the datepicker
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    
-    const wallTimeString = `${year}-${month}-${day}T${hours}:${minutes}:00`;
-    
-    try {
-      const parsed = toDate(wallTimeString, { timeZone: timezone });
-      if (!isNaN(parsed.getTime())) {
-        setDepartureDate(parsed);
-      }
-    } catch (err) { console.error(err) }
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const time = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:00`;
+    setDepartureDate(toDate(time, { timeZone: timezone }));
   };
-
-  // Convert the true UTC departureDate to a local Date object that represents the same wall-clock time in the target timezone
-  const dateParts = formatInTimeZone(departureDate, timezone, "yyyy-MM-dd-HH-mm-ss");
-  const [dpYear, dpMonth, dpDay, dpHours, dpMins, dpSecs] = dateParts.split('-').map(Number);
-  const displayDate = new Date(dpYear, dpMonth - 1, dpDay, dpHours, dpMins, dpSecs);
-
-  const maxDate = new Date();
-  maxDate.setDate(maxDate.getDate() + 3);
-  let maxInputValue = '';
-  let minInputValue = '';
-  try {
-    maxInputValue = formatInTimeZone(maxDate, timezone, "yyyy-MM-dd'T'HH:mm");
-    minInputValue = formatInTimeZone(new Date(), timezone, "yyyy-MM-dd'T'HH:mm");
-  } catch (e) { }
-
-  const handleSwap = () => {
-    const temp = origin;
-    setOrigin(destination);
-    setDestination(temp);
-  };
-
   const handleGPS = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition((position) => {
-        const { latitude, longitude } = position.coords;
-        setOrigin(`${latitude},${longitude}`);
-      }, () => {
-        alert("Could not access your location. Please enable GPS permissions.");
-      });
-    }
+    setNotice('');
+    if (!navigator.geolocation) { setNotice('Location access is unavailable. Enter your starting point instead.'); return; }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(position => {
+      setOrigin(`${position.coords.latitude},${position.coords.longitude}`); setLocating(false);
+    }, () => { setLocating(false); setNotice('Allow location permission or enter your starting point.'); }, { timeout: 10000 });
   };
-
-  const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href);
-    alert("Route link copied to clipboard!");
+  const share = async () => {
+    try { await navigator.clipboard.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 2500); }
+    catch { setNotice('Could not copy the link. Copy the address from your browser instead.'); }
   };
-
-  const handleEdit = () => {
-    setIsEditing(true);
-  };
-
-  let finalRec = recommendationResult?.recommendation;
-  let weatherOverride = false;
-
-  if (recommendationResult) {
-    if (weather?.isRainy) {
-      finalRec = "Rainy 🌧️";
-      weatherOverride = true;
-    } else if (weather?.isCloudy) {
-      finalRec = "Cloudy ☁️";
-      weatherOverride = true;
-    }
-  }
-
+  const result = recommendationResult;
+  const night = result?.recommendation === 'Night';
+  const weatherOverride = weather?.isRainy || weather?.isCloudy;
+  const seat = night || weatherOverride || result?.recommendation === 'Either' ? 'Either side' : `${result?.recommendation} side`;
+  const higherExposure = Math.max(result?.leftCount || 0, result?.rightCount || 0);
+  const lowerExposure = Math.min(result?.leftCount || 0, result?.rightCount || 0);
+  const shadePercent = higherExposure ? Math.round(100 * (1 - lowerExposure / higherExposure)) : 0;
+  const StatusIcon = night ? Moon : weather?.isRainy ? CloudRain : weather?.isCloudy ? Cloud : Sun;
   return (
-    <div className="glass-panel controls-panel" style={isMinimized ? { paddingBottom: '24px', gap: 0 } : {}}>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isMinimized ? 0 : '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <MapIcon size={20} color="#eab308" />
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 600, margin: 0 }}>Route Planner</h2>
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={handleShare} style={{ padding: '6px', background: 'rgba(255,255,255,0.1)', width: 'auto', boxShadow: 'none' }} title="Share Route">
-            <Share2 size={18} />
-          </button>
-          <button onClick={() => setIsMinimized(!isMinimized)} style={{ padding: '6px', background: 'transparent', color: '#fff', width: 'auto', boxShadow: 'none' }}>
-            {isMinimized ? <ChevronUp size={24} /> : <ChevronDown size={24} />}
-          </button>
-        </div>
-      </div>
-
-      {!isMinimized && (
-        <>
-          {isEditing ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div className="tour-mode" style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={() => setTransportMode('BUS')}
-                  style={{
-                    flex: 1,
-                    background: transportMode === 'BUS' ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)',
-                    color: transportMode === 'BUS' ? '#fff' : 'rgba(255,255,255,0.6)',
-                    boxShadow: 'none'
-                  }}
-                >
-                  <Bus size={18} /> Bus
-                </button>
-                <button
-                  onClick={() => setTransportMode('TRAIN')}
-                  style={{
-                    flex: 1,
-                    background: transportMode === 'TRAIN' ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)',
-                    color: transportMode === 'TRAIN' ? '#fff' : 'rgba(255,255,255,0.6)',
-                    boxShadow: 'none'
-                  }}
-                >
-                  <Train size={18} /> Train
-                </button>
-              </div>
-
-              <div className="tour-route" style={{ display: 'flex', flexDirection: 'column', gap: '8px', position: 'relative' }}>
-                <div style={{ position: 'relative' }}>
-                  <MapPin size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'rgba(255,255,255,0.4)', zIndex: 2 }} />
-                  <PlaceInput value={origin} onChange={setOrigin} placeholder="Origin" />
-                  <button
-                    onClick={handleGPS}
-                    style={{ position: 'absolute', right: '4px', top: '4px', padding: '6px', width: 'auto', background: 'transparent', boxShadow: 'none' }}
-                    title="Use Current Location"
-                  >
-                    <LocateFixed size={18} color="#3b82f6" />
-                  </button>
-                </div>
-
-                <button onClick={handleSwap} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 10, padding: '4px', width: 'auto', background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '50%' }}>
-                  <ArrowUpDown size={14} color="#eab308" />
-                </button>
-
-                <div style={{ position: 'relative' }}>
-                  <Navigation size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'rgba(255,255,255,0.4)', zIndex: 2 }} />
-                  <PlaceInput value={destination} onChange={setDestination} placeholder="Destination" />
-                </div>
-              </div>
-
-              <div className="tour-time">
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '8px' }}>
-                  <span>Departure Time ({timezone.split('/')[1] || timezone})</span>
-                </div>
-                <DatePicker
-                  selected={displayDate}
-                  onChange={handleDatePickerChange}
-                  showTimeSelect
-                  timeFormat="h:mm aa"
-                  timeIntervals={30}
-                  timeCaption="Time"
-                  dateFormat="MMMM d, yyyy h:mm aa"
-                  minDate={new Date()}
-                  maxDate={maxDate}
-                  className="custom-datepicker"
-                  calendarClassName="glass-calendar"
-                  wrapperClassName="datepicker-wrapper"
-                  portalId="datepicker-portal"
-                />
-              </div>
-
-              <button className="tour-button" onClick={() => { setIsEditing(false); onCalculate(); }} disabled={isLoading || !origin || !destination}>
-                Find Best Side
-              </button>
-
-              {recentRoutes.length > 0 && !isLoading && (
-                <div style={{ marginTop: '4px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', marginBottom: '8px' }}>
-                    <History size={14} /> Recent Routes
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    {recentRoutes.map((route, i) => (
-                      <button
-                        key={i}
-                        onClick={() => {
-                          setOrigin(route.origin);
-                          setDestination(route.destination);
-                          setTransportMode(route.mode);
-                        }}
-                        style={{ background: 'rgba(255,255,255,0.05)', textAlign: 'left', padding: '8px 12px', fontSize: '0.85rem', boxShadow: 'none' }}
-                      >
-                        <div style={{ color: '#fff', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{route.origin.split(',')[0]} → {route.destination.split(',')[0]}</div>
-                        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{route.mode}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
-               <div style={{ flex: 1, minWidth: 0, marginRight: '12px' }}>
-                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.95rem', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden' }}>
-                    {transportMode === 'BUS' ? <Bus size={14} color="#3b82f6" /> : <Train size={14} color="#3b82f6" />}
-                    <span style={{ textOverflow: 'ellipsis', overflow: 'hidden' }}>{origin.split(',')[0] || 'Origin'}</span>
-                    <span style={{ color: 'rgba(255,255,255,0.4)' }}>→</span>
-                    <span style={{ textOverflow: 'ellipsis', overflow: 'hidden' }}>{destination.split(',')[0] || 'Destination'}</span>
-                 </div>
-                 <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginTop: '4px' }}>
-                    {(() => {
-                      try { return formatInTimeZone(departureDate, timezone, "MMM d, h:mm a"); }
-                      catch(e) { return ''; }
-                    })()}
-                 </div>
-               </div>
-               <button onClick={handleEdit} style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', fontSize: '0.8rem', borderRadius: '6px', width: 'auto', boxShadow: 'none' }}>
-                 Edit
-               </button>
-            </div>
-          )}
-
-          {isLoading && (
-            <div className="skeleton-loader" style={{ height: '200px', borderRadius: '12px', marginTop: '12px' }} />
-          )}
-
-          {!isLoading && !isEditing && recommendationResult && (
-            <div style={{
-              marginTop: '12px',
-              padding: '16px',
-              borderRadius: '12px',
-              background: weatherOverride ? 'linear-gradient(135deg, rgba(100, 116, 139, 0.2), rgba(71, 85, 105, 0.1))' :
-                finalRec === 'Right' ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(37, 99, 235, 0.1))' :
-                  finalRec === 'Left' ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.1))' :
-                    finalRec === 'Night' ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(109, 40, 217, 0.1))' :
-                      'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              textAlign: 'center',
-              transition: 'all 0.3s ease'
-            }}>
-              <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)', marginBottom: '4px' }}>
-                {weatherOverride ? 'No Sun Glare' : finalRec === 'Night' ? 'No Sun Glare' : 'Recommended Seat Side'}
-              </div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff', marginBottom: '12px' }}>
-                {finalRec === 'Night' ? 'Night Time 🌙' : weatherOverride ? `${finalRec} - Sit Anywhere` : finalRec}
-              </div>
-
-              {weatherOverride && recommendationResult.recommendation !== 'Night' && recommendationResult.recommendation !== 'Either' && (
-                <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.8)', marginBottom: '36px', marginTop: '-6px' }}>
-                  Best Side (If Sunny): <strong style={{ color: '#eab308' }}>{recommendationResult.recommendation}</strong>
-                </div>
-              )}
-
-              {finalRec !== 'Night' && recommendationResult.recommendation !== 'Night' && recommendationResult.recommendation !== 'Either' && (
-                <VehicleGraphic mode={transportMode} recommendation={recommendationResult.recommendation} />
-              )}
-
-              {finalRec !== 'Night' && recommendationResult.recommendation !== 'Night' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)' }}>
-                    <span>Left Sun Exposure</span>
-                    <span>Right Sun Exposure</span>
-                  </div>
-                  <div style={{ display: 'flex', height: '6px', borderRadius: '4px', overflow: 'hidden', background: 'rgba(255,255,255,0.1)' }}>
-                    {(() => {
-                      const total = recommendationResult.leftCount + recommendationResult.rightCount || 1;
-                      const leftPct = (recommendationResult.leftCount / total) * 100;
-                      return (
-                        <>
-                          <div style={{ width: `${leftPct}%`, background: '#3b82f6' }} />
-                          <div style={{ width: `${100 - leftPct}%`, background: '#f97316' }} />
-                        </>
-                      );
-                    })()}
-                  </div>
-                </div>
-              )}
-
-              <div style={{ marginTop: '16px', textAlign: 'left' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)' }}>Trip Timeline</span>
-                  <div style={{ display: 'flex', gap: '12px', fontSize: '0.7rem', color: 'rgba(255,255,255,0.6)' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#8b5cf6' }} />Night</span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6' }} />Left Sun</span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f97316' }} />Right Sun</span>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', height: '12px', borderRadius: '6px', overflow: 'hidden', marginTop: '6px' }}>
-                  {recommendationResult.timeline.map((seg, i) => {
-                    let bg = '#333';
-                    let label = 'Neutral';
-                    if (seg.status === 'night') { bg = '#8b5cf6'; label = 'Night'; }
-                    if (seg.status === 'left') { bg = '#3b82f6'; label = 'Left Sun'; }
-                    if (seg.status === 'right') { bg = '#f97316'; label = 'Right Sun'; }
-
-                    const timeStr = formatInTimeZone(new Date(seg.timeMs), timezone, "h:mm a");
-                    const mins = Math.round(seg.durationMs / 60000);
-
-                    return (
-                      <div
-                        key={i}
-                        style={{ flex: seg.durationMs, backgroundColor: bg, transition: 'opacity 0.2s', cursor: 'help' }}
-                        title={`${timeStr} • ${mins} mins (${label})`}
-                        onMouseOver={(e) => e.currentTarget.style.opacity = '0.8'}
-                        onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-              
-              <div style={{ textAlign: 'center', marginTop: '16px', fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>
-                Calculated using accurate seasonal sun paths for {(() => {
-                  try { return formatInTimeZone(departureDate, timezone, 'MMMM yyyy'); }
-                  catch(e) { return ''; }
-                })()}
-              </div>
-            </div>
-          )}
-
-          {!isEditing && shadierTime && !isLoading && (
-            <button 
-              onClick={() => {
-                setDepartureDate(shadierTime);
-                setTimeout(() => onCalculate(), 0);
-              }}
-              style={{ width: '100%', padding: '12px', background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.4)', borderRadius: '8px', marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: '#eab308', boxShadow: 'none', transition: 'all 0.2s' }}>
-              <Sun size={18} />
-              <span>💡 Tip: Leave at <strong>{formatInTimeZone(shadierTime, timezone, "h:mm a")}</strong> for less sun glare! [Apply]</span>
-            </button>
-          )}
-
-          {!isEditing && isDrivingFallback && !isLoading && (
-            <p role="status" style={{ fontSize: '0.8rem', color: '#fbbf24', marginTop: '12px' }}>No bus schedule was found. Showing an estimated road route; this is not a confirmed bus service.</p>
-          )}
-
-          {!isEditing && !isLoading && routeWarnings?.map((warning, index) => (
-            <p key={index} role="status" style={{ fontSize: '0.8rem', color: '#fbbf24', marginTop: '8px' }}>{warning}</p>
-          ))}
-
-          {!isEditing && steps && steps.length > 0 && !isLoading && (
-            <details style={{ marginTop: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
-              <summary style={{ cursor: 'pointer', fontSize: '0.85rem', color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>View Journey Steps</summary>
-              <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {steps.map((step, idx) => (
-                  <div key={idx} style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', borderLeft: '2px solid rgba(255,255,255,0.2)', paddingLeft: '12px' }}>
-                    <div className="step-instructions">{step.instructions}</div>
-                    <div style={{ marginTop: '4px', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>{step.distance?.text} • {step.duration?.text}</div>
-                  </div>
-                ))}
-              </div>
-            </details>
-          )}
-
-        </>
+    <aside className="planner" aria-label="Route planner">
+      <div className="planner-heading"><span className="small-sun"><Sun size={18} /></span><span>A little planning. A cooler ride.</span></div>
+      <h1>Find your{' '}<br />shady side.</h1>
+      <p className="planner-intro">Pick your journey. We’ll find the side with less sun along the way.</p>
+      {isEditing ? (
+        <form onSubmit={event => { event.preventDefault(); if (origin.trim() && destination.trim()) onCalculate(); }} className="route-form">
+          <div className="mode-switch tour-mode" aria-label="Travel mode">
+            <button type="button" aria-pressed={transportMode === 'BUS'} onClick={() => setTransportMode('BUS')}><BusFront size={19} />Bus</button>
+            <button type="button" aria-pressed={transportMode === 'TRAIN'} onClick={() => setTransportMode('TRAIN')}><TrainFront size={19} />Train</button>
+          </div>
+          <div className="route-fields tour-route">
+            <div className="route-field"><span className="route-dot start" aria-hidden="true" /><label>From<PlaceInput value={origin} onChange={setOrigin} placeholder="Starting point" /></label><button type="button" className="icon-button locate-button" onClick={handleGPS} disabled={locating} aria-label="Use my current location" title="Use my current location">{locating ? <LoaderCircle size={18} className="spin" /> : <LocateFixed size={18} />}</button></div>
+            <div className="route-field"><span className="route-dot end" aria-hidden="true" /><label>To<PlaceInput value={destination} onChange={setDestination} placeholder="Where are you going?" /></label></div>
+            <button type="button" className="swap-button icon-button" aria-label="Swap starting point and destination" onClick={() => { setOrigin(destination); setDestination(origin); }}><ArrowDownUp size={16} /></button>
+          </div>
+          <div className="departure-field tour-time"><CalendarDays size={19} /><label htmlFor="departure-time">Departure<DatePicker id="departure-time" selected={displayDate} onChange={handleDate} showTimeSelect timeIntervals={15} timeFormat="h:mm aa" dateFormat="EEE, MMM d · h:mm aa" minDate={new Date()} maxDate={maxDate} className="departure-input" calendarClassName="journey-calendar" wrapperClassName="datepicker-wrapper" portalId="datepicker-portal" /></label></div>
+          <p className="timezone-note"><Clock3 size={12} /> Times in {timezone.replaceAll('_', ' ').split('/').pop()}</p>
+          <button type="submit" className="primary-button tour-button" disabled={isLoading || !origin.trim() || !destination.trim()}>{isLoading ? <><LoaderCircle size={18} className="spin" />Finding your shady side…</> : <>Find the best seat<ArrowRight size={19} /></>}</button>
+        </form>
+      ) : (
+        <div className="trip-summary"><div><span className="summary-mode">{transportMode === 'BUS' ? <BusFront size={16} /> : <TrainFront size={16} />}{transportMode === 'BUS' ? 'Bus journey' : 'Train journey'}</span><strong>{origin.split(',')[0]}<ChevronRight size={14} />{destination.split(',')[0]}</strong><small>{formatInTimeZone(departureDate, timezone, 'EEE, MMM d · h:mm a')}</small></div><button className="icon-button" aria-label="Edit journey" onClick={() => setIsEditing(true)}><Pencil size={17} /></button></div>
       )}
-    </div>
+      {(notice || routeError) && <p className="inline-error" role="alert">{routeError || notice}</p>}
+      {isLoading && !isEditing && <div className="route-progress" role="status"><LoaderCircle className="spin" size={24} /><span>Following the sun along your route…</span></div>}
+      {!isEditing && !isLoading && result && <div className="journey-result">
+        <div className="result-heading"><span className="result-check"><Check size={16} /></span>Your seat recommendation</div>
+        <div className="seat-result"><h2>{seat}</h2><StatusIcon size={32} strokeWidth={1.5} /></div>
+        <p>{night ? 'The sun is below the horizon. Settle in wherever you like.' : weather?.isRainy ? 'Rain is forecast along your journey. Sun glare should be less of a concern.' : weather?.isCloudy ? 'Cloudy skies are forecast. Either side should be comfortable.' : seat === 'Either side' ? 'Sun exposure is fairly balanced on this journey.' : 'Facing forward, choose this side for less direct sunlight.'}</p>
+        {!night && !weatherOverride && shadePercent > 0 && seat !== 'Either side' && <div className="shade-stat"><strong>{shadePercent}%</strong><span>less estimated sun than the other side</span></div>}
+        {weatherOverride && !night && result.recommendation !== 'Either' && <small>If the sky clears, choose the {result.recommendation.toLowerCase()} side.</small>}
+        <a className="explore-link" href="#journey-map"><Sun size={15} />Explore the sun along your route<ArrowRight size={15} /></a>
+        {result.timeline.length > 0 && <div className="exposure-section"><div className="section-title">Sun along the journey<span>{Math.round(result.timeline.reduce((sum, segment) => sum + segment.durationMs, 0) / 60000)} min</span></div><div className="exposure-strip" aria-label="Sun exposure over time">{result.timeline.map((segment, index) => <span key={index} style={{ flex: Math.max(segment.durationMs, 1) }} className={`exposure-${segment.status}`} title={`${formatInTimeZone(segment.timeMs, timezone, 'h:mm a')}: ${segment.status === 'neutral' ? 'Sun ahead or behind' : segment.status === 'night' ? 'Night' : `Sun on the ${segment.status}`} (${Math.round(segment.durationMs / 60000)} min)`} />)}</div><div className="exposure-legend"><span><i className="exposure-left" />Sun on left</span><span><i className="exposure-right" />Sun on right</span><span><i className="exposure-night" />Night</span></div></div>}
+        {shadierTime && <button className="time-suggestion" onClick={() => { setDepartureDate(shadierTime); setIsEditing(true); }}><Clock3 size={20} /><span>A shadier time to leave<strong>{formatInTimeZone(shadierTime, timezone, 'h:mm a')} · review your departure</strong></span><ChevronRight size={17} /></button>}
+        {isDrivingFallback && <p className="route-warning">No bus schedule was found. This is an estimated road route, not a confirmed bus service.</p>}
+        {routeWarnings.map((warning, index) => <p key={index} className="route-warning">{warning}</p>)}
+        {steps.length > 0 && <details className="journey-steps"><summary>Journey directions<span>{steps.length} steps</span></summary><ol>{steps.map((step, index) => <li key={index}><span className="step-number">{index + 1}</span><div>{step.instructions}<small>{step.distance.text} · {step.duration.text}</small></div></li>)}</ol></details>}
+        <button className="secondary-button" onClick={share}>{copied ? <Check size={16} /> : <Share2 size={16} />}{copied ? 'Link copied' : 'Share this journey'}</button>
+      </div>}
+      {isEditing && recentRoutes.length > 0 && <section className="recent-routes"><h2><History size={16} />Pick up where you left off</h2>{recentRoutes.slice(0, 3).map((route, index) => <button key={index} onClick={() => { setOrigin(route.origin); setDestination(route.destination); setTransportMode(route.mode); }}><span>{route.mode === 'BUS' ? <BusFront size={17} /> : <TrainFront size={17} />}</span><div><strong>{route.origin.split(',')[0]}</strong><small>to {route.destination.split(',')[0]}</small></div><ChevronRight size={16} /></button>)}</section>}
+      <div className="planner-footnote"><span className="window-sketch"><i /><i /><i /></span><p>Same journey.<br /><strong>A more comfortable window seat.</strong></p></div>
+    </aside>
   );
 }

@@ -10,6 +10,7 @@ import { calculateOverallBestSide, RecommendationResult, findShadierTime } from 
 import { fetchWeather, WeatherData } from '@/utils/weather';
 import { computeRoutePlan, RoutePlan } from '@/utils/routes';
 import { Joyride, Step, STATUS } from 'react-joyride';
+import { Sun, LoaderCircle } from 'lucide-react';
 
 const libraries: ("places")[] = ["places"];
 
@@ -36,6 +37,7 @@ export default function Home() {
   const [runTour, setRunTour] = useState(false);
   const [tourKey, setTourKey] = useState(0);
   const [isEditing, setIsEditing] = useState(true);
+  const [routeError, setRouteError] = useState('');
   const [mapsAuthFailed, setMapsAuthFailed] = useState(false);
 
   useEffect(() => {
@@ -60,37 +62,32 @@ export default function Home() {
   });
 
   useEffect(() => {
-    setIsMounted(true);
-    setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    const frame = requestAnimationFrame(() => {
+      setIsMounted(true);
+      setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
 
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('origin')) setOrigin(params.get('origin')!);
-    if (params.get('dest')) setDestination(params.get('dest')!);
-    if (params.get('mode') === 'TRAIN' || params.get('mode') === 'BUS') setTransportMode(params.get('mode') as TransportMode);
-    if (params.get('time')) {
-      const parsed = new Date(Number(params.get('time')));
-      if (!isNaN(parsed.getTime())) setDepartureDate(parsed);
-    } else {
-      setDepartureDate(new Date());
-    }
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('origin')) setOrigin(params.get('origin')!);
+      if (params.get('dest')) setDestination(params.get('dest')!);
+      if (params.get('mode') === 'TRAIN' || params.get('mode') === 'BUS') setTransportMode(params.get('mode') as TransportMode);
+      if (params.get('time')) {
+        const parsed = new Date(Number(params.get('time')));
+        if (!isNaN(parsed.getTime())) setDepartureDate(parsed);
+      } else {
+        setDepartureDate(new Date());
+      }
 
-    if (params.get('origin') && params.get('dest')) {
-      setAutoCalculatePending(true);
-    }
+      if (params.get('origin') && params.get('dest')) {
+        setAutoCalculatePending(true);
+      }
 
-    try {
-      const recents = JSON.parse(localStorage.getItem('sun-direction-recents') || '[]');
-      setRecentRoutes(recents);
-    } catch (e) { }
+      try {
+        const recents = JSON.parse(localStorage.getItem('sun-direction-recents') || '[]');
+        setRecentRoutes(recents);
+      } catch { }
 
-    const hasSeenTour = localStorage.getItem('sun-direction-tour');
-    if (!hasSeenTour) {
-      // Delay tour slightly so map and controls render
-      setTimeout(() => {
-        setRunTour(true);
-        localStorage.setItem('sun-direction-tour', 'true');
-      }, 1000);
-    }
+    });
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   const saveRecent = (orig: string, dest: string, mode: TransportMode) => {
@@ -117,6 +114,8 @@ export default function Home() {
     if (!window.google) return;
 
     setIsLoading(true);
+    setIsEditing(false);
+    setRouteError('');
     setDirections(null);
     setRecommendationResult(null);
     setShadierTime(null);
@@ -140,7 +139,7 @@ export default function Home() {
       const setupHint = /denied|authoriz|not enabled|blocked|API key/i.test(message)
         ? '\n\nEnable Routes API in your Google Cloud project and allow it in the API key restrictions.'
         : '';
-      alert(`Could not load the route. ${message}${setupHint}`);
+      setRouteError(`Could not load the route. ${message}${setupHint}`);
     } finally {
       setIsLoading(false);
     }
@@ -148,13 +147,16 @@ export default function Home() {
 
   useEffect(() => {
     if (isLoaded && autoCalculatePending && origin && destination) {
-      setAutoCalculatePending(false);
-      handleCalculate();
+      const timer = setTimeout(() => {
+        setAutoCalculatePending(false);
+        handleCalculate();
+      }, 0);
+      return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, autoCalculatePending, origin, destination]);
 
-  const handleJoyrideCallback = (data: any) => {
+  const handleJoyrideCallback = (data: { status: string }) => {
     const { status } = data;
     const finishedStatuses: string[] = [STATUS.FINISHED, STATUS.SKIPPED];
 
@@ -195,7 +197,7 @@ export default function Home() {
 
   if (!apiKey) {
     return (
-      <div style={{ display: 'flex', height: '100vh', width: '100vw', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0f172a', color: '#fff', flexDirection: 'column', gap: '16px' }}>
+      <div className="state-screen">
         <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>Missing Google Maps API Key</h2>
         <p style={{ color: 'rgba(255,255,255,0.7)' }}>Please add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to your .env file and restart the server.</p>
       </div>
@@ -204,7 +206,7 @@ export default function Home() {
 
   if (loadError || mapsAuthFailed) {
     return (
-      <div role="alert" style={{ color: 'white', padding: '2rem', background: '#0f172a', minHeight: '100vh' }}>
+      <div className="state-screen" role="alert">
         <h2>Google Maps could not load</h2>
         <p>Check that the API key&apos;s Google Cloud project has active billing and Maps JavaScript API enabled.</p>
         <p>For BillingNotEnabledMapError, link an active billing account to that project in Google Cloud Console.</p>
@@ -216,14 +218,13 @@ export default function Home() {
 
   if (!isLoaded) {
     return (
-      <div style={{ display: 'flex', height: '100vh', width: '100vw', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0f172a', color: '#fff' }}>
-        Loading Map & Places...
+      <div className="state-screen" role="status"><Sun size={36} /><h2>A better seat is on the way.</h2><p>Loading your map and place search…</p><LoaderCircle className="spin" size={22} />
       </div>
     );
   }
 
   return (
-    <main style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+    <main className="app-shell">
       <div id="datepicker-portal" />
       <Joyride
         key={tourKey}
@@ -232,18 +233,17 @@ export default function Home() {
         continuous={true}
         onEvent={handleJoyrideCallback}
         options={{
-          primaryColor: '#3b82f6',
-          backgroundColor: '#1e293b',
-          textColor: '#fff',
-          arrowColor: '#1e293b',
+          primaryColor: '#416b89',
+          backgroundColor: '#ffffff',
+          textColor: '#193449',
+          arrowColor: '#ffffff',
           overlayColor: 'rgba(0, 0, 0, 0.6)'
         }}
       />
 
       <Header timezone={timezone} setTimezone={setTimezone} onStartTour={handleStartTour} />
 
-      <Map directions={directions} departureDate={departureDate} timezone={timezone} weather={weather} />
-
+      <div className="workspace">
       <Controls
         origin={origin}
         setOrigin={setOrigin}
@@ -264,10 +264,13 @@ export default function Home() {
         setTransportMode={setTransportMode}
         recentRoutes={recentRoutes}
         runTour={runTour}
+        routeError={routeError}
         isEditing={isEditing}
         setIsEditing={setIsEditing}
       />
 
+      <Map directions={directions} departureDate={departureDate} timezone={timezone} weather={weather} transportMode={transportMode} />
+      </div>
       <Footer />
     </main>
   );
