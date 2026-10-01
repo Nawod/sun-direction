@@ -30,7 +30,7 @@ Built specifically for mobile use, the app calculates the exact geometry of your
 
 ### 1. Prerequisites
 - Node.js (v18 or higher)
-- A Google Cloud Console account with the **Maps JavaScript API** and **Places API** enabled.
+- A Google Cloud Console account with the **Maps JavaScript API** and **Places API (New)** enabled, with an active billing account linked to the same project. Routing uses **Routes API**, which must also be enabled and allowed by your API key.
 
 ### 2. Clone the Repository
 ```bash
@@ -53,7 +53,7 @@ npm install
 ```bash
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:8001](http://localhost:8001) with your browser to see the result.
 
 ## 📦 PWA Support (Production)
 
@@ -68,3 +68,13 @@ npm run start
 Created by **Nawod Madhuwantha** ([nawodmadhuwantha.com](https://www.nawodmadhuwantha.com/)).
 
 This project and its source code are provided for educational and demonstrative purposes. All rights reserved.
+
+## Google Maps troubleshooting
+
+`BillingNotEnabledMapError` means billing is not enabled for the Google Cloud project that owns your API key. In Google Cloud Console, select that project, open Billing, and link an active billing account. This cannot be fixed in application code.
+
+Enable Maps JavaScript API and Places API (New) in that same project. Allow these APIs in the key restrictions, along with Routes API for routing. Set website restrictions to include `http://localhost:8001/*` and your production origin.
+
+Routing uses Route.computeRoutes and createPolylines from the Maps JavaScript routes library. The selected departure time and bus/train preference are included in requests. If no bus route is available, an estimated driving route is clearly labeled.
+
+The route fields use PlaceAutocompleteElement rather than the deprecated Autocomplete widget. After changing the environment key, restart the development server (rebuild for production), then reload the page.

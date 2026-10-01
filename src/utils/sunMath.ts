@@ -1,4 +1,5 @@
 import SunCalc from 'suncalc';
+import type { JourneyLeg } from './routes';
 
 export interface Coordinates {
   lat: number;
@@ -118,9 +119,9 @@ export interface RecommendationResult {
   timeline: TimelineSegment[];
 }
 
-export function calculateOverallBestSide(legs: any[], departureTime: Date): RecommendationResult {
+export function calculateOverallBestSide(legs: JourneyLeg[], departureTime: Date): RecommendationResult {
   if (legs.length === 0) return { recommendation: 'Either', leftCount: 0, rightCount: 0, timeline: [] };
-  const steps = legs[0].steps;
+  const steps = legs.flatMap(leg => leg.steps);
   if (!steps || steps.length === 0) return { recommendation: 'Either', leftCount: 0, rightCount: 0, timeline: [] };
 
   let leftExposure = 0;
@@ -220,7 +221,7 @@ export function calculateOverallBestSide(legs: any[], departureTime: Date): Reco
   };
 }
 
-export function findShadierTime(legs: any[], currentDepartureDate: Date, originalLeft: number, originalRight: number): Date | null {
+export function findShadierTime(legs: JourneyLeg[], currentDepartureDate: Date, originalLeft: number, originalRight: number): Date | null {
   const originalExposure = originalLeft + originalRight;
   if (originalExposure === 0) return null; // Already no sun
 

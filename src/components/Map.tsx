@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useState, useMemo, useEffect } from 'react';
-import { GoogleMap, DirectionsRenderer, Polyline, OverlayView } from '@react-google-maps/api';
+import { GoogleMap, Polyline, OverlayView } from '@react-google-maps/api';
 import { getSunBearing, getMoonBearing, isNightTime } from '@/utils/sunMath';
 import { Sun, Moon, Cloud, CloudRain } from 'lucide-react';
 import { formatInTimeZone } from 'date-fns-tz';
 import { WeatherData } from '@/utils/weather';
+import { RoutePlan } from '@/utils/routes';
 
 const mapContainerStyle = {
   width: '100%',
@@ -40,7 +41,7 @@ const darkMapStyle = [
 ];
 
 interface MapProps {
-  directions: google.maps.DirectionsResult | null;
+  directions: RoutePlan | null;
   departureDate: Date;
   timezone: string;
   weather?: WeatherData | null;
@@ -65,13 +66,13 @@ export default function Map({ directions, departureDate, timezone, weather }: Ma
 
   const path = useMemo(() => {
     if (!directions) return [];
-    return directions.routes[0].overview_path;
+    return directions.path;
   }, [directions]);
 
   // Calculate points with exact timestamps for interpolation
   const routePoints = useMemo(() => {
     if (!directions) return [];
-    const steps = directions.routes[0].legs[0].steps;
+    const steps = directions.legs.flatMap(leg => leg.steps);
     const points: { lat: number, lng: number, timeMs: number }[] = [];
     
     let currentTimeMs = departureDate.getTime();
@@ -92,6 +93,16 @@ export default function Map({ directions, departureDate, timezone, weather }: Ma
     }
     return points;
   }, [directions, departureDate]);
+
+  useEffect(() => {
+    if (!map || !directions) return;
+    const polylines = directions.route.createPolylines();
+    polylines.forEach(polyline => polyline.setMap(map));
+    const bounds = new google.maps.LatLngBounds();
+    directions.path.forEach(point => bounds.extend(point));
+    map.fitBounds(bounds, 60);
+    return () => polylines.forEach(polyline => polyline.setMap(null));
+  }, [map, directions]);
 
   const currentPoint = activePoint || (path.length > 0 ? path[0] : null);
   const isDefault = !activePoint;
@@ -153,12 +164,13 @@ export default function Map({ directions, departureDate, timezone, weather }: Ma
     >
       {directions && (
         <>
-          <DirectionsRenderer
-            directions={directions}
-            options={{
-              suppressMarkers: false,
-            }}
-          />
+          {[path[0], path[path.length - 1]].map((point, index) => point && (
+            <OverlayView key={index} position={point} mapPaneName="overlayMouseTarget">
+              <div aria-label={index === 0 ? 'Route start' : 'Route end'} style={{ transform: 'translate(-50%, -100%)', background: '#3b82f6', color: '#fff', border: '2px solid #fff', borderRadius: '50%', width: '28px', height: '28px', display: 'grid', placeItems: 'center', fontWeight: 700 }}>
+                {index === 0 ? 'A' : 'B'}
+              </div>
+            </OverlayView>
+          ))}
 
           {/* Invisible Wide Hit Area for easier hovering and touching */}
           <Polyline

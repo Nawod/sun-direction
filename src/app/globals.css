@@ -383,3 +383,14 @@ input[type=range]::-webkit-slider-runnable-track {
   color: rgba(30, 41, 59, 0.95) !important;
   stroke: rgba(255, 255, 255, 0.1) !important;
 }
+.place-input {
+  display: block;
+  width: 100%;
+  color-scheme: dark;
+  border-radius: 8px;
+}
+
+.place-input::part(input) {
+  padding-left: 40px;
+  padding-right: 40px;
+}

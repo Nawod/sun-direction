@@ -8,6 +8,7 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { calculateOverallBestSide, RecommendationResult, findShadierTime } from '@/utils/sunMath';
 import { fetchWeather, WeatherData } from '@/utils/weather';
+import { computeRoutePlan, RoutePlan } from '@/utils/routes';
 import { Joyride, Step, STATUS } from 'react-joyride';
 
 const libraries: ("places")[] = ["places"];
@@ -23,7 +24,7 @@ export default function Home() {
   const [destination, setDestination] = useState('');
   const [departureDate, setDepartureDate] = useState<Date>(new Date());
   const [timezone, setTimezone] = useState<string>('UTC');
-  const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+  const [directions, setDirections] = useState<RoutePlan | null>(null);
   const [recommendationResult, setRecommendationResult] = useState<RecommendationResult | null>(null);
   const [shadierTime, setShadierTime] = useState<Date | null>(null);
   const [weather, setWeather] = useState<WeatherData | null>(null);
@@ -35,6 +36,20 @@ export default function Home() {
   const [runTour, setRunTour] = useState(false);
   const [tourKey, setTourKey] = useState(0);
   const [isEditing, setIsEditing] = useState(true);
+  const [mapsAuthFailed, setMapsAuthFailed] = useState(false);
+
+  useEffect(() => {
+    const mapsWindow = window as Window & { gm_authFailure?: () => void };
+    const previousHandler = mapsWindow.gm_authFailure;
+    const handler = () => {
+      setMapsAuthFailed(true);
+      previousHandler?.();
+    };
+    mapsWindow.gm_authFailure = handler;
+    return () => {
+      if (mapsWindow.gm_authFailure === handler) mapsWindow.gm_authFailure = previousHandler;
+    };
+  }, []);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
@@ -97,72 +112,38 @@ export default function Home() {
     window.history.replaceState(null, '', `?${params.toString()}`);
   };
 
-  const handleCalculate = () => {
+  const handleCalculate = async () => {
     if (!origin || !destination) return;
     if (!window.google) return;
 
     setIsLoading(true);
+    setDirections(null);
     setRecommendationResult(null);
     setShadierTime(null);
     setWeather(null);
     updateUrl();
 
-    const directionsService = new window.google.maps.DirectionsService();
-
-    const routeRequest: google.maps.DirectionsRequest = {
-      origin: origin,
-      destination: destination,
-      travelMode: window.google.maps.TravelMode.TRANSIT,
-    };
-
-    if (transportMode === 'TRAIN') {
-      routeRequest.transitOptions = { modes: [window.google.maps.TransitMode.TRAIN] };
-    } else if (transportMode === 'BUS') {
-      routeRequest.transitOptions = { modes: [window.google.maps.TransitMode.BUS] };
-    }
-
-    const processResult = async (result: google.maps.DirectionsResult) => {
+    try {
+      const result = await computeRoutePlan(origin, destination, departureDate, transportMode);
       setDirections(result);
       saveRecent(origin, destination, transportMode);
-
-      const legs = result.routes[0].legs;
-      const recResult = calculateOverallBestSide(legs, departureDate);
+      const recResult = calculateOverallBestSide(result.legs, departureDate);
       setRecommendationResult(recResult);
-
-      const shadier = findShadierTime(legs, departureDate, recResult.leftCount, recResult.rightCount);
-      setShadierTime(shadier);
-
-      const path = result.routes[0].overview_path;
-      if (path.length > 0) {
-        const midPoint = path[Math.floor(path.length / 2)];
-        const durationSecs = legs[0].duration?.value || 0;
-        const midTime = new Date(departureDate.getTime() + (durationSecs / 2) * 1000);
-        const wData = await fetchWeather(midPoint.lat(), midPoint.lng(), midTime);
-        setWeather(wData);
-      }
+      setShadierTime(findShadierTime(result.legs, departureDate, recResult.leftCount, recResult.rightCount));
+      const midPoint = result.path[Math.floor(result.path.length / 2)];
+      const durationSecs = result.legs.reduce((total, leg) => total + leg.duration.value, 0);
+      const midTime = new Date(departureDate.getTime() + durationSecs * 500);
+      setWeather(await fetchWeather(midPoint.lat(), midPoint.lng(), midTime));
+    } catch (error) {
+      setIsEditing(true);
+      const message = error instanceof Error ? error.message : 'The route request failed.';
+      const setupHint = /denied|authoriz|not enabled|blocked|API key/i.test(message)
+        ? '\n\nEnable Routes API in your Google Cloud project and allow it in the API key restrictions.'
+        : '';
+      alert(`Could not load the route. ${message}${setupHint}`);
+    } finally {
       setIsLoading(false);
-    };
-
-    directionsService.route(routeRequest, (result, status) => {
-      if (status === window.google.maps.DirectionsStatus.OK && result) {
-        processResult(result);
-      } else if (transportMode === 'BUS' && status === window.google.maps.DirectionsStatus.ZERO_RESULTS) {
-        routeRequest.travelMode = window.google.maps.TravelMode.DRIVING;
-        delete routeRequest.transitOptions;
-
-        directionsService.route(routeRequest, (fallbackResult, fallbackStatus) => {
-          if (fallbackStatus === window.google.maps.DirectionsStatus.OK && fallbackResult) {
-            processResult(fallbackResult);
-          } else {
-            setIsLoading(false);
-            alert(`Could not find a route. Please check your locations.`);
-          }
-        });
-      } else {
-        setIsLoading(false);
-        alert(`Could not find a ${transportMode.toLowerCase()} route. Please check your locations.`);
-      }
-    });
+    }
   };
 
   useEffect(() => {
@@ -221,8 +202,16 @@ export default function Home() {
     );
   }
 
-  if (loadError) {
-    return <div style={{ color: 'white', padding: '2rem' }}>Error loading Google Maps API</div>;
+  if (loadError || mapsAuthFailed) {
+    return (
+      <div role="alert" style={{ color: 'white', padding: '2rem', background: '#0f172a', minHeight: '100vh' }}>
+        <h2>Google Maps could not load</h2>
+        <p>Check that the API key&apos;s Google Cloud project has active billing and Maps JavaScript API enabled.</p>
+        <p>For BillingNotEnabledMapError, link an active billing account to that project in Google Cloud Console.</p>
+        <p>Place search also requires Places API (New). Check the key&apos;s website and API restrictions, then reload this page.</p>
+        <a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer">Open Google Cloud Console</a>
+      </div>
+    );
   }
 
   if (!isLoaded) {
@@ -266,7 +255,9 @@ export default function Home() {
         onCalculate={handleCalculate}
         recommendationResult={recommendationResult}
         shadierTime={shadierTime}
-        steps={directions?.routes[0]?.legs[0]?.steps || []}
+        steps={directions?.legs.flatMap(leg => leg.steps) || []}
+        isDrivingFallback={directions?.isDrivingFallback || false}
+        routeWarnings={directions?.route.warnings || []}
         weather={weather}
         isLoading={isLoading}
         transportMode={transportMode}

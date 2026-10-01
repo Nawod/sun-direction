@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { Navigation, MapPin, Bus, Train, Map as MapIcon, ChevronDown, ChevronUp, ArrowUpDown, LocateFixed, Share2, History, CloudRain, Cloud, Sun, Moon } from 'lucide-react';
-import { Autocomplete } from '@react-google-maps/api';
+import PlaceInput from './PlaceInput';
+import { JourneyStep } from '@/utils/routes';
 import { formatInTimeZone, toDate } from 'date-fns-tz';
 import { RecommendationResult } from '@/utils/sunMath';
 import { WeatherData } from '@/utils/weather';
@@ -23,7 +24,9 @@ interface ControlsProps {
   timezone: string;
   recommendationResult: RecommendationResult | null;
   shadierTime?: Date | null;
-  steps?: google.maps.DirectionsStep[];
+  steps?: JourneyStep[];
+  isDrivingFallback?: boolean;
+  routeWarnings?: string[];
   weather: WeatherData | null;
   isLoading: boolean;
   transportMode: TransportMode;
@@ -85,6 +88,8 @@ export default function Controls({
   recommendationResult,
   shadierTime,
   steps,
+  isDrivingFallback,
+  routeWarnings,
   weather,
   isLoading,
   transportMode,
@@ -95,8 +100,6 @@ export default function Controls({
   setIsEditing
 }: ControlsProps) {
   
-  const [autocompleteOrigin, setAutocompleteOrigin] = useState<google.maps.places.Autocomplete | null>(null);
-  const [autocompleteDestination, setAutocompleteDestination] = useState<google.maps.places.Autocomplete | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
   const [inputValue, setInputValue] = useState('');
 
@@ -171,23 +174,6 @@ export default function Controls({
     setIsEditing(true);
   };
 
-  const onOriginLoad = (autocomplete: google.maps.places.Autocomplete) => setAutocompleteOrigin(autocomplete);
-  const onDestinationLoad = (autocomplete: google.maps.places.Autocomplete) => setAutocompleteDestination(autocomplete);
-
-  const onOriginPlaceChanged = () => {
-    if (autocompleteOrigin !== null) {
-      const place = autocompleteOrigin.getPlace();
-      setOrigin(place?.formatted_address || place?.name || origin);
-    }
-  };
-
-  const onDestinationPlaceChanged = () => {
-    if (autocompleteDestination !== null) {
-      const place = autocompleteDestination.getPlace();
-      setDestination(place?.formatted_address || place?.name || destination);
-    }
-  };
-
   let finalRec = recommendationResult?.recommendation;
   let weatherOverride = false;
 
@@ -251,15 +237,7 @@ export default function Controls({
               <div className="tour-route" style={{ display: 'flex', flexDirection: 'column', gap: '8px', position: 'relative' }}>
                 <div style={{ position: 'relative' }}>
                   <MapPin size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'rgba(255,255,255,0.4)', zIndex: 2 }} />
-                  <Autocomplete onLoad={onOriginLoad} onPlaceChanged={onOriginPlaceChanged}>
-                    <input
-                      type="text"
-                      placeholder="Origin"
-                      value={origin}
-                      onChange={(e) => setOrigin(e.target.value)}
-                      style={{ paddingLeft: '40px', paddingRight: '40px' }}
-                    />
-                  </Autocomplete>
+                  <PlaceInput value={origin} onChange={setOrigin} placeholder="Origin" />
                   <button
                     onClick={handleGPS}
                     style={{ position: 'absolute', right: '4px', top: '4px', padding: '6px', width: 'auto', background: 'transparent', boxShadow: 'none' }}
@@ -275,15 +253,7 @@ export default function Controls({
 
                 <div style={{ position: 'relative' }}>
                   <Navigation size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'rgba(255,255,255,0.4)', zIndex: 2 }} />
-                  <Autocomplete onLoad={onDestinationLoad} onPlaceChanged={onDestinationPlaceChanged}>
-                    <input
-                      type="text"
-                      placeholder="Destination"
-                      value={destination}
-                      onChange={(e) => setDestination(e.target.value)}
-                      style={{ paddingLeft: '40px', paddingRight: '40px' }}
-                    />
-                  </Autocomplete>
+                  <PlaceInput value={destination} onChange={setDestination} placeholder="Destination" />
                 </div>
               </div>
 
@@ -468,13 +438,21 @@ export default function Controls({
             </button>
           )}
 
+          {!isEditing && isDrivingFallback && !isLoading && (
+            <p role="status" style={{ fontSize: '0.8rem', color: '#fbbf24', marginTop: '12px' }}>No bus schedule was found. Showing an estimated road route; this is not a confirmed bus service.</p>
+          )}
+
+          {!isEditing && !isLoading && routeWarnings?.map((warning, index) => (
+            <p key={index} role="status" style={{ fontSize: '0.8rem', color: '#fbbf24', marginTop: '8px' }}>{warning}</p>
+          ))}
+
           {!isEditing && steps && steps.length > 0 && !isLoading && (
             <details style={{ marginTop: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
               <summary style={{ cursor: 'pointer', fontSize: '0.85rem', color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>View Journey Steps</summary>
               <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {steps.map((step, idx) => (
                   <div key={idx} style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', borderLeft: '2px solid rgba(255,255,255,0.2)', paddingLeft: '12px' }}>
-                    <div dangerouslySetInnerHTML={{ __html: step.instructions }} className="step-instructions" />
+                    <div className="step-instructions">{step.instructions}</div>
                     <div style={{ marginTop: '4px', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>{step.distance?.text} • {step.duration?.text}</div>
                   </div>
                 ))}
