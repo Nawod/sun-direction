@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { GoogleMap, OverlayView, Polyline } from '@react-google-maps/api';
 import { Sun, Moon, LocateFixed, Layers2, Compass, MapPin, Route, CloudSun, ChevronLeft, ChevronRight } from 'lucide-react';
 import SunCalc from 'suncalc';
@@ -27,6 +27,13 @@ export default memo(function Map({ directions, departureDate, timezone, weather,
   const [selection,setSelection] = useState({ route:directions, index:0 });
   const [showSun,setShowSun] = useState(true);
   const [satellite,setSatellite] = useState(false);
+  const hoverFrame=useRef<number|null>(null);
+  const hoverPoint=useRef<google.maps.LatLng|null>(null);
+  useEffect(()=>()=>{
+    if(hoverFrame.current!==null)cancelAnimationFrame(hoverFrame.current);
+    hoverFrame.current=null;
+    hoverPoint.current=null;
+  },[directions]);
   const options=useMemo<google.maps.MapOptions>(()=>({styles,disableDefaultUI:true,zoomControl:true,zoomControlOptions:{position:google.maps.ControlPosition.INLINE_END_BLOCK_CENTER},gestureHandling:'cooperative',clickableIcons:false,mapTypeId:satellite?'satellite':'roadmap'}),[satellite]);
   const samples = useMemo(() => {
     const steps=directions?.legs.flatMap(leg=>leg.steps)||[];
@@ -67,6 +74,8 @@ export default memo(function Map({ directions, departureDate, timezone, weather,
     return()=>polylines.forEach(line=>line.setMap(null));
   },[map,directions]);
   const select=(i:number,pan=false)=>{
+    if(hoverFrame.current!==null)cancelAnimationFrame(hoverFrame.current);
+    hoverFrame.current=null;
     const selected=Math.max(0,Math.min(i,samples.length-1));
     setSelection(old=>old.route===directions&&old.index===selected?old:{route:directions,index:selected});
     if(pan&&samples[selected])map?.panTo(samples[selected].point);
@@ -75,9 +84,18 @@ export default memo(function Map({ directions, departureDate, timezone, weather,
     if(!point)return;let best=0;let distance=Infinity;
     samples.forEach((sample,i)=>{const d=(sample.point.lat()-point.lat())**2+(sample.point.lng()-point.lng())**2;if(d<distance){distance=d;best=i;}});select(best);
   };
+  const hover=(event:google.maps.MapMouseEvent)=>{
+    if(!event.latLng||!window.matchMedia('(min-width: 801px) and (hover: hover) and (pointer: fine)').matches)return;
+    hoverPoint.current=event.latLng;
+    // Coalesce pointer events; leaving the route deliberately preserves selection.
+    if(hoverFrame.current===null)hoverFrame.current=requestAnimationFrame(()=>{
+      hoverFrame.current=null;
+      nearest(hoverPoint.current);
+    });
+  };
   return <section id="journey-map" className="map-stage" aria-label="Journey map and sun explorer" tabIndex={-1}>
     <GoogleMap mapContainerClassName="map-canvas" center={center} zoom={11} onLoad={setMap} onUnmount={()=>setMap(null)} options={options}>
-      {directions && <><Polyline path={directions.path} options={{strokeOpacity:.01,strokeWeight:35,zIndex:20}} onClick={event=>nearest(event.latLng)} />{[directions.path[0],directions.path.at(-1)].map((point,i)=>point&&<OverlayView key={i} position={point} mapPaneName="overlayMouseTarget"><span className="map-waypoint">{i?'B':'A'}</span></OverlayView>)}</>}
+      {directions && <><Polyline path={directions.path} options={{strokeOpacity:.01,strokeWeight:35,zIndex:20}} onMouseMove={hover} onClick={event=>nearest(event.latLng)} />{[directions.path[0],directions.path.at(-1)].map((point,i)=>point&&<OverlayView key={i} position={point} mapPaneName="overlayMouseTarget"><span className="map-waypoint">{i?'B':'A'}</span></OverlayView>)}</>}
       {showSun && <OverlayView position={current?.point||center} mapPaneName="overlayLayer"><SunCompass azimuth={azimuth} altitude={altitude} heading={heading} preview={!current} mode={transportMode} /></OverlayView>}
       {current && <OverlayView position={current.point} mapPaneName="overlayLayer"><span className="route-position-dot" /></OverlayView>}
     </GoogleMap>

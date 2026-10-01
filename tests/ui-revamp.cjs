@@ -64,7 +64,7 @@ const fs = require('node:fs');
           window.__routeRequest = request;
           if (window.__denyRoute) throw new Error('PERMISSION_DENIED: API key is not authorized');
           const path = [{lat:6.9271,lng:79.8612},{lat:6.915,lng:79.866},{lat:6.899,lng:79.858},{lat:6.883,lng:79.864},{lat:6.861,lng:79.873},{lat:6.84,lng:79.87}];
-          return { routes: [{ path, warnings: [], legs: [{ durationMillis: 1500000, steps: [{ path, distanceMeters: 10400, staticDurationMillis: 1500000, instructions: 'Travel south toward Mount Lavinia', travelMode: 'TRANSIT' }] }], createPolylines: () => [new google.maps.Polyline({ path, strokeColor: '#286550', strokeWeight: 5 })] }] };
+          return { routes: [{ path, warnings: [], legs: [{ durationMillis: 1500000, steps: [{ path, distanceMeters: 10400, staticDurationMillis: 1500000, instructions: 'Travel south toward Mount Lavinia', travelMode: 'TRANSIT' }] }], createPolylines: () => { const line=new google.maps.Polyline({ path, strokeColor: '#286550', strokeWeight: 5 }); const attach=line.setMap.bind(line); line.setMap=map=>{ if(map)window.__testMap=map; attach(map); }; return [line]; } }] };
         } } };
       };
       document.querySelectorAll('gmp-place-autocomplete').forEach((el, i) => {
@@ -104,6 +104,26 @@ const fs = require('node:fs');
     await page.evaluate(()=>window.scrollTo(0,0));
     await page.waitForTimeout(1200);
     await page.screenshot({ path: 'artifacts/ui/desktop-route.png' });
+    await page.getByRole('button', {name:'Fit map to journey'}).click();
+    await page.waitForTimeout(700);
+    const beforeHoverCenter=await page.evaluate(()=>window.__testMap.getCenter().toJSON());
+    for(const sample of [{index:'1',lat:6.915,lng:79.866},{index:'3',lat:6.883,lng:79.864}]) {
+      const pixel=await page.evaluate(({lat,lng})=>{
+        const map=window.__testMap;
+        const projection=map.getProjection();
+        const center=projection.fromLatLngToPoint(map.getCenter());
+        const point=projection.fromLatLngToPoint(new google.maps.LatLng(lat,lng));
+        const bounds=map.getDiv().getBoundingClientRect();
+        const scale=2**map.getZoom();
+        return {x:bounds.left+bounds.width/2+(point.x-center.x)*scale,y:bounds.top+bounds.height/2+(point.y-center.y)*scale};
+      },sample);
+      await page.mouse.move(pixel.x,pixel.y);
+      await page.waitForFunction(index=>document.querySelector('#journey-position').value===index,sample.index);
+    }
+    await page.mouse.move(100,35);
+    await page.waitForTimeout(250);
+    assert.equal(await page.getByRole('slider').inputValue(),'3','last hovered sample remains after mouse leaves');
+    assert.deepEqual(await page.evaluate(()=>window.__testMap.getCenter().toJSON()),beforeHoverCenter,'hover does not pan the map');
     await page.getByRole('slider', { name: 'Position along journey' }).fill('3');
     assert.equal(await page.getByRole('slider').inputValue(), '3');
     await page.getByRole('button', { name: 'Next point on route' }).click();
