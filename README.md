@@ -42,6 +42,7 @@ cd sun-direction
 Create a `.env` file in the root directory and add your Google Maps API Key:
 ```env
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_api_key_here
+NEXT_PUBLIC_APP_URL=https://your-production-domain.example
 ```
 
 ### 4. Install Dependencies
@@ -54,6 +55,14 @@ npm install
 npm run dev
 ```
 Open [http://localhost:8001](http://localhost:8001) with your browser to see the result.
+
+## Guided tour and discoverability
+
+First-time visitors receive an interactive spotlight tour of the real controls. Bus/train selection advances the tour; location steps use the visitor's own input; route calculation must succeed before the recommendation and slider steps. Skip or Escape dismisses the tour, and “How it works” replays it. Completion or dismissal is saved locally as `sun-direction-tour-v2`.
+
+Set `NEXT_PUBLIC_APP_URL` to the actual production origin before building. Canonical links, social metadata, structured data, robots.txt, sitemap.xml, and the generated llms.txt share this value. The home page includes server-rendered explanatory content, and `/guide` documents accessible controls and share-link parameters for people and browser agents. Query-string journeys canonicalize to the home page. These changes do not guarantee indexing or search ranking.
+
+Run `node --test tests/routes.test.cjs tests/seo.test.cjs` with the app running for routing and discovery checks. `tests/ui-revamp.cjs` checks the interactive UI using a live Google basemap and a route fixture; set `TOUR_MOBILE=1` for the phone tour. Set `PLAYWRIGHT_PATH` and `BROWSER_PATH` to your local browser test installation if needed.
 
 ## 📦 PWA Support (Production)
 

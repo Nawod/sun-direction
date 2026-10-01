@@ -1,124 +1,26 @@
 'use client';
 
-import { Sun, Download, Info, X, MapPin, Map, Sun as SunIcon, Bus } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { getAllCountries } from 'countries-and-timezones';
+import { useEffect, useMemo, useState } from 'react';
+import { Sun, CircleHelp, Globe2, Download, ChevronDown } from 'lucide-react';
 
-interface HeaderProps {
-  timezone: string;
-  setTimezone: (tz: string) => void;
-  onStartTour?: () => void;
-}
+interface InstallEvent extends Event { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> }
+interface HeaderProps { timezone: string; setTimezone: (value: string) => void; onStartTour: () => void }
 
 export default function Header({ timezone, setTimezone, onStartTour }: HeaderProps) {
-  const [mounted, setMounted] = useState(false);
-  const [countries, setCountries] = useState<any[]>([]);
-  const [selectedCountry, setSelectedCountry] = useState<string>('');
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-
+  const [install, setInstall] = useState<InstallEvent | null>(null);
+  const zones = useMemo<string[]>(() => Intl.supportedValuesOf('timeZone'), []);
   useEffect(() => {
-    setMounted(true);
-    const all = getAllCountries();
-    const sorted = Object.values(all).sort((a, b) => a.name.localeCompare(b.name));
-    setCountries(sorted);
-
-    // Initial load: Find the country that matches the provided timezone
-    const localTz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const found = sorted.find(c => (c.timezones as string[]).includes(localTz));
-    if (found) {
-      setSelectedCountry(found.id);
-    }
-
-    const handleBeforeInstallPrompt = (e: any) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
-  }, [timezone]);
-
-  const handleCountryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const id = e.target.value;
-    setSelectedCountry(id);
-    const country = countries.find(c => c.id === id);
-    if (country && country.timezones.length > 0) {
-      setTimezone(country.timezones[0]);
-    }
-  };
-
-  const handleInstallClick = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        setDeferredPrompt(null);
-      }
-    }
-  };
-
-  return (
-    <>
-      <header className="glass-panel header-panel">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Sun size={24} color="#eab308" className="header-logo" />
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Sun Direction</h1>
-        </div>
-
-        {mounted && (
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <button 
-              onClick={() => {
-                if (onStartTour) onStartTour();
-              }} 
-              style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', padding: '6px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: 'none' }} 
-              title="Start Tour"
-            >
-              <Info size={16} />
-            </button>
-
-            {deferredPrompt && (
-              <button
-                onClick={handleInstallClick}
-                style={{ background: '#3b82f6', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '8px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.4)' }}
-              >
-                <Download size={16} /> <span className="hide-on-mobile">Install</span>
-              </button>
-            )}
-              <select
-              className="mobile-select"
-              value={selectedCountry}
-              onChange={handleCountryChange}
-              style={{
-                background: 'rgba(255,255,255,0.1)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                color: '#fff',
-                padding: '6px 10px',
-                borderRadius: '8px',
-                fontFamily: 'Outfit, sans-serif',
-                fontSize: '0.85rem',
-                outline: 'none',
-                cursor: 'pointer',
-                maxWidth: '130px',
-                minWidth: '80px',
-                textOverflow: 'ellipsis'
-              }}
-            >
-              {countries.map(c => {
-                if (c.timezones.length === 0) return null;
-                return (
-                  <option key={c.id} value={c.id} style={{ background: '#1e293b' }}>
-                    {c.name}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-        )}
-      </header>
-    </>
-  );
+    const handler = (event: Event) => { event.preventDefault(); setInstall(event as InstallEvent); };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+  return <header className="app-header">
+    <a className="brand" href="#planner" aria-label="Sun Direction route planner"><span className="brand-mark"><Sun size={23} /></span><span>sun direction<span className="brand-period">.</span></span></a>
+    <span className="header-caption">A little less sun. A better journey.</span>
+    <nav aria-label="Settings and help">
+      <label className="timezone-select"><Globe2 size={15} /><span>{timezone.split('/').pop()?.replaceAll('_', ' ')}</span><ChevronDown size={12} /><select aria-label="Journey timezone" value={timezone} onChange={event => setTimezone(event.target.value)}>{!zones.includes(timezone) && <option>{timezone}</option>}{zones.map(zone => <option key={zone} value={zone}>{zone.replaceAll('_', ' ')}</option>)}</select></label>
+      <button className="help-button" aria-label="How it works" onClick={onStartTour}><CircleHelp size={17} /><span>How it works</span></button>
+      {install && <button className="icon-button" aria-label="Install app" onClick={async () => { await install.prompt(); if ((await install.userChoice).outcome === 'accepted') setInstall(null); }}><Download size={18} /></button>}
+    </nav>
+  </header>;
 }
-

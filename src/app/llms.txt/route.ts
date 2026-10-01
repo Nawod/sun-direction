@@ -1,0 +1,5 @@
+import { siteUrl, siteDescription } from '@/utils/site';
+
+export function GET() {
+  return new Response(`# Sun Direction\n\n> ${siteDescription}\n\n## Pages\n- [Route planner](${siteUrl}/): Interactive bus/train seat recommendation and sun compass.\n- [User guide and browser-agent reference](${siteUrl}/guide): Controls, query parameters, interpretation, and limitations.\n\n## Browser interaction\nUse the real labeled controls in the Plan a journey form. The optional tour can be dismissed with Skip guide or Escape. Select Bus or Train; enter Your starting point and Where are you headed?; set Leaving at and Journey timezone; click Find my shady side. Wait for Seat recommendation or an error alert. Read the textual result and Sunlight along the journey region. Use Position along journey to explore samples.\n\n## Limits\nGoogle Maps and a network connection are required for live results. This is a sunlight estimate, not guaranteed shade or a ticket booking service. A road-route fallback is labeled when applicable. No public routing API is provided.\n`, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' } });
+}

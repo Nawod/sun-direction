@@ -1,14 +1,14 @@
 import { MetadataRoute } from 'next';
+import { siteUrl } from '@/utils/site';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.sundirection.nawodmadhuwantha.com';
 
   return [
     {
-      url: baseUrl,
-      lastModified: new Date(),
+      url: siteUrl,
       changeFrequency: 'weekly',
       priority: 1,
     },
+    { url: `${siteUrl}/guide`, changeFrequency: 'monthly', priority: 0.6 },
   ];
 }
